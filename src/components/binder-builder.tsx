@@ -25,6 +25,8 @@ import {
   ImagePlus,
   Sparkles,
   Wand2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
@@ -85,6 +87,8 @@ export function BinderBuilder({
 }) {
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [pages, setPages] = useState(pageCount);
+  const [spread, setSpread] = useState(false); // false = 1 page, true = 2-page spread
+  const [firstPage, setFirstPage] = useState(0); // index of leftmost visible page
   const [themeKey, setThemeKey] = useState(theme);
   const [filters, setFilters] = useState<Filters>({ language: DEFAULT_LANGUAGE });
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -279,6 +283,7 @@ export function BinderBuilder({
         })),
       ]);
       setPages((p) => p + 1);
+      setFirstPage(pages); // jump to the newly added page
     });
   }
 
@@ -330,65 +335,109 @@ export function BinderBuilder({
   const pageArray = Array.from({ length: pages }, (_, p) =>
     slots.filter((s) => Math.floor(s.position / SLOTS_PER_PAGE) === p),
   );
+  const perView = spread ? 2 : 1;
+  const shownPages = pageArray.slice(firstPage, firstPage + perView);
+  const pageLabel =
+    shownPages.length === 2
+      ? `Pages ${firstPage + 1}–${firstPage + 2} of ${pages}`
+      : `Page ${firstPage + 1} of ${pages}`;
 
   return (
     <DndContext id="binder-dnd" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Binder pages — laid out left to right like a real binder */}
+        {/* Binder pages — one page at a time (or a 2-page spread) */}
         <div className="min-w-0">
-          {/* Background picker */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Background
-            </span>
-            {THEMES.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => changeTheme(t.key)}
-                title={t.label}
-                style={{ background: t.background }}
-                className={cn(
-                  "size-6 rounded-md border transition-transform hover:scale-110",
-                  themeKey === t.key ? "border-primary ring-2 ring-primary/50" : "border-border",
-                )}
-              />
-            ))}
+          {/* Controls: background + view toggle */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Background
+              </span>
+              {THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => changeTheme(t.key)}
+                  title={t.label}
+                  style={{ background: t.background }}
+                  className={cn(
+                    "size-6 rounded-md border transition-transform hover:scale-110",
+                    themeKey === t.key ? "border-primary ring-2 ring-primary/50" : "border-border",
+                  )}
+                />
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+              {[
+                { v: false, l: "1 page" },
+                { v: true, l: "2 pages" },
+              ].map((o) => (
+                <button
+                  key={o.l}
+                  onClick={() => setSpread(o.v)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    spread === o.v
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex gap-5 overflow-x-auto pb-3">
-            {pageArray.map((pageSlots, p) => (
-              <div key={p} className="w-[19rem] shrink-0 sm:w-[22rem]">
-                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                  Page {p + 1}
-                </div>
-                <div
-                  className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-3 sm:gap-3.5 sm:p-4"
-                  style={{ background: themeBackground(themeKey) }}
-                >
-                  {pageSlots.map((slot) => (
-                    <SlotCell
-                      key={slot.position}
-                      slot={slot}
-                      selected={target === slot.position}
-                      onSelect={() => setTarget(target === slot.position ? null : slot.position)}
-                      onRemove={() => remove(slot.position)}
-                      onToggle={() => toggleStatus(slot.position)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+          {/* Page navigation */}
+          <div className="mb-3 flex items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setFirstPage(Math.max(0, firstPage - perView))}
+              disabled={firstPage === 0}
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="min-w-36 text-center text-sm text-muted-foreground">{pageLabel}</span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setFirstPage(firstPage + perView)}
+              disabled={firstPage + perView >= pages}
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="ml-2 gap-1.5" onClick={onAddPage}>
+              <Plus className="size-4" /> Add page
+            </Button>
+          </div>
 
-            {/* Add page as a column at the end */}
-            <div className="flex w-28 shrink-0 flex-col">
-              <div className="mb-2 text-xs">&nbsp;</div>
-              <button
-                onClick={onAddPage}
-                className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-              >
-                <Plus className="size-5" /> Add page
-              </button>
-            </div>
+          {/* Visible page(s) */}
+          <div className="flex justify-center gap-6">
+            {shownPages.map((pageSlots, i) => {
+              const p = firstPage + i;
+              return (
+                <div key={p} className={cn("w-full", spread ? "max-w-sm" : "max-w-lg")}>
+                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                    Page {p + 1}
+                  </div>
+                  <div
+                    className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-4"
+                    style={{ background: themeBackground(themeKey) }}
+                  >
+                    {pageSlots.map((slot) => (
+                      <SlotCell
+                        key={slot.position}
+                        slot={slot}
+                        selected={target === slot.position}
+                        onSelect={() => setTarget(target === slot.position ? null : slot.position)}
+                        onRemove={() => remove(slot.position)}
+                        onToggle={() => toggleStatus(slot.position)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

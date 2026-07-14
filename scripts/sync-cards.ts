@@ -9,8 +9,15 @@
  * Note: Japanese/Korean sets have their own ids (JP 151 = SV2a, not sv03.5).
  */
 import { prisma } from "../src/lib/prisma";
+import { SUBTYPES } from "../src/lib/card-query";
 
 const BASE = "https://api.tcgdex.net/v2";
+
+// Canonicalize subtype casing so filters match across languages (JA "EX" → "ex").
+const SUBTYPE_CANON = new Map(SUBTYPES.map((s) => [s.toLowerCase(), s as string]));
+function canonSubtype(s: string): string {
+  return SUBTYPE_CANON.get(s.toLowerCase()) ?? s;
+}
 
 // lang → set ids to pull. Western sets share ids across en/es/fr/…; JP sets differ.
 const DEFAULT_TARGETS: { lang: string; sets: string[] }[] = [
@@ -63,7 +70,7 @@ function toSubtypes(c: FullCard): string[] {
   if (c.stage) out.push(c.stage.replace(/^Stage(\d)$/, "Stage $1"));
   if (c.suffix) out.push(c.suffix);
   if (c.trainerType) out.push(c.trainerType === "Tool" ? "Pokémon Tool" : c.trainerType);
-  return out;
+  return out.map(canonSubtype);
 }
 
 const FULL_ART =
