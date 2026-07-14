@@ -1,55 +1,45 @@
 import Link from "next/link";
-import { Truck } from "lucide-react";
-import { requireAdmin } from "@/lib/session";
+import { PackageOpen } from "lucide-react";
+import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { formatEur } from "@/lib/format";
 import { STATE_LABEL, type FulfillmentState } from "@/lib/fulfillment";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export const metadata = { title: "Ops — bindr" };
+export const metadata = { title: "My orders — bindr" };
 
-const OPEN_STATES = ["REQUESTED", "QUOTED", "PAID", "SOURCING", "PARTIALLY_SOURCED", "SOURCED", "ASSEMBLING"];
-
-export default async function OpsPage() {
-  await requireAdmin();
-
+export default async function OrdersPage() {
+  const user = await requireUser();
   const orders = await prisma.fulfillmentOrder.findMany({
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
-    take: 100,
-    include: {
-      binder: { select: { title: true } },
-      user: { select: { email: true } },
-      _count: { select: { items: true } },
-    },
+    include: { binder: { select: { title: true } }, _count: { select: { items: true } } },
   });
 
-  const open = orders.filter((o) => OPEN_STATES.includes(o.state));
   const fmt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
-      <div className="flex items-center gap-2">
-        <Truck className="size-6 text-accent" />
-        <h1 className="text-3xl">Fulfillment ops</h1>
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {open.length} open · {orders.length} total. Click an order to source & ship.
-      </p>
+    <div className="mx-auto max-w-3xl px-4 py-12">
+      <h1 className="text-3xl">My orders</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Physical build requests and their status.</p>
 
       {orders.length === 0 ? (
-        <Card className="mt-10 p-14 text-center text-muted-foreground">
-          No fulfillment requests yet.
+        <Card className="mt-10 flex flex-col items-center gap-3 p-14 text-center">
+          <PackageOpen className="size-8 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            No build requests yet. Open a binder and hit “Request build”.
+          </p>
         </Card>
       ) : (
         <div className="mt-8 space-y-3">
           {orders.map((o) => (
-            <Link key={o.id} href={`/ops/${o.id}`}>
+            <Link key={o.id} href={`/orders/${o.id}`}>
               <Card className="flex items-center justify-between p-4 transition-colors hover:border-primary/50">
                 <div>
                   <div className="font-medium">{o.binder.title}</div>
                   <div className="text-sm text-muted-foreground">
-                    {o.user.email} · {o._count.items} cards · {fmt.format(o.createdAt)}
+                    {o._count.items} card{o._count.items === 1 ? "" : "s"} · {fmt.format(o.createdAt)}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
@@ -383,9 +384,17 @@ export function BinderBuilder({
               <Stat label="Owned" value={formatEur(totals.owned)} />
               <Stat label="To source" value={formatEur(totals.wanted)} accent />
             </div>
-            <Button className="mt-4 w-full gap-2" disabled={totals.wanted <= 0} title="Fulfillment coming soon">
-              <ShoppingBag className="size-4" /> Request build
-            </Button>
+            {totals.wanted > 0 ? (
+              <Button asChild className="mt-4 w-full gap-2">
+                <Link href={`/binders/${binderId}/request`}>
+                  <ShoppingBag className="size-4" /> Request build
+                </Link>
+              </Button>
+            ) : (
+              <Button className="mt-4 w-full gap-2" disabled title="Mark cards to source first">
+                <ShoppingBag className="size-4" /> Request build
+              </Button>
+            )}
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
               We source the “to source” cards and ship the finished binder.
             </p>

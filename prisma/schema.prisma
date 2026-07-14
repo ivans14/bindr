@@ -205,16 +205,46 @@ model FulfillmentOrder {
   userId                String
   user                  User             @relation(fields: [userId], references: [id])
   state                 FulfillmentState @default(REQUESTED)
-  quotedTotal           Decimal?         @db.Decimal(10, 2) // cards + fee + shipping
   currency              String           @default("EUR")
+  cardsTotal            Decimal?         @db.Decimal(10, 2) // sum of sourced-card prices at request time
   serviceFee            Decimal?         @db.Decimal(10, 2)
   shippingFee           Decimal?         @db.Decimal(10, 2)
+  quotedTotal           Decimal?         @db.Decimal(10, 2) // cards + fee + shipping
   stripePaymentIntentId String?
-  notes                 String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  // Frozen shipping address (snapshot at request time)
+  shipName    String?
+  shipLine1   String?
+  shipLine2   String?
+  shipCity    String?
+  shipPostal  String?
+  shipCountry String?
+  carrier      String?
+  trackingCode String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items FulfillmentItem[]
 
   @@index([userId])
   @@index([state])
   @@map("fulfillment_order")
+}
+
+// One row per card to source in an order (snapshot — the binder can change later).
+model FulfillmentItem {
+  id        String           @id @default(cuid())
+  orderId   String
+  order     FulfillmentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cardId    String?
+  name      String
+  setName   String
+  number    String
+  imageBase String?
+  priceEur  Decimal?         @db.Decimal(10, 2)
+  sourced   Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([orderId])
+  @@map("fulfillment_item")
 }
