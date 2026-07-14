@@ -24,6 +24,7 @@ import {
   Layers,
   ImagePlus,
   Sparkles,
+  Wand2,
 } from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
@@ -39,6 +40,7 @@ import {
   updateBinderMeta,
   similarCards,
 } from "@/app/actions/binders";
+import { assembleBinder } from "@/app/actions/ai";
 import { type CardFilters as Filters, hasActiveFilters, DEFAULT_LANGUAGE } from "@/lib/card-query";
 import { THEMES, themeBackground, SLEEVES, sleeveBackground } from "@/lib/binder-style";
 import { cn } from "@/lib/utils";
@@ -278,11 +280,14 @@ export function BinderBuilder({
     });
   }
 
-  async function importFromCsv(text: string): Promise<ImportSummary> {
-    const res = await importCards(binderId, text);
+  // Merge a batch of placements (CSV import / AI assembly) into local slot state.
+  function mergePlacements(
+    placements: { position: number; status: "OWNED" | "WANTED"; card: CardLite; priceEur: number | null }[],
+    pageCount: number,
+  ) {
     setSlots((prev) => {
       const map = new Map(prev.map((s) => [s.position, s]));
-      for (const pl of res.placements) {
+      for (const pl of placements) {
         map.set(pl.position, {
           position: pl.position,
           status: pl.status,
@@ -292,8 +297,7 @@ export function BinderBuilder({
           priceEur: pl.priceEur,
         });
       }
-      // Fill any gaps created by new pages with empty slots.
-      for (let p = 0; p < res.pageCount * SLOTS_PER_PAGE; p++) {
+      for (let p = 0; p < pageCount * SLOTS_PER_PAGE; p++) {
         if (!map.has(p))
           map.set(p, {
             position: p,
@@ -306,7 +310,18 @@ export function BinderBuilder({
       }
       return [...map.values()].sort((a, b) => a.position - b.position);
     });
-    setPages(res.pageCount);
+    setPages(pageCount);
+  }
+
+  async function importFromCsv(text: string): Promise<ImportSummary> {
+    const res = await importCards(binderId, text);
+    mergePlacements(res.placements, res.pageCount);
+    return res;
+  }
+
+  async function assembleFromAi(prompt: string) {
+    const res = await assembleBinder(binderId, prompt);
+    if ("ok" in res && res.ok) mergePlacements(res.placements, res.pageCount);
     return res;
   }
 
@@ -445,6 +460,8 @@ export function BinderBuilder({
               ))}
             </div>
           </div>
+
+          <AiAssemblePanel onAssemble={assembleFromAi} />
 
           <SleevesPanel
             onPick={(key) => {
@@ -631,6 +648,62 @@ function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void 
       <div className="shrink-0 text-right text-xs font-semibold">
         {card.priceEur != null ? formatEur(card.priceEur) : "—"}
       </div>
+    </div>
+  );
+}
+
+type AssembleResult = Awaited<ReturnType<typeof assembleBinder>>;
+
+function AiAssemblePanel({ onAssemble }: { onAssemble: (prompt: string) => Promise<AssembleResult> }) {
+  const [open, setOpen] = useState(true);
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ note?: string; placed?: number; error?: string } | null>(null);
+
+  async function run() {
+    if (!prompt.trim()) return;
+    setBusy(true);
+    setResult(null);
+    const res = await onAssemble(prompt);
+    if ("ok" in res && res.ok) {
+      setResult({ note: res.note, placed: res.placed });
+      setPrompt("");
+    } else if ("error" in res) {
+      setResult({ error: res.error });
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-primary/30 bg-card p-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-sm font-medium"
+      >
+        <Wand2 className="size-4 text-primary" /> AI assemble
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            placeholder="Describe a binder — e.g. “a page of Fire-type full arts under €20 each” or “the 151 Charizard line”"
+            className="w-full rounded-lg border border-input bg-background/40 p-2 text-xs placeholder:text-muted-foreground"
+          />
+          <Button size="sm" className="w-full gap-1.5" onClick={run} disabled={busy || !prompt.trim()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {busy ? "Assembling…" : "Generate"}
+          </Button>
+          {result?.error && <p className="text-xs text-destructive">{result.error}</p>}
+          {result?.placed != null && (
+            <div className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
+              <div className="font-medium text-foreground">Added {result.placed} cards</div>
+              {result.note && <p className="mt-0.5 text-muted-foreground">{result.note}</p>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
