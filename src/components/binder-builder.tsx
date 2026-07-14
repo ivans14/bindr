@@ -12,29 +12,25 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Search, X, Check, ShoppingBag, Plus, Loader2, GripVertical } from "lucide-react";
+import { Search, ShoppingBag, Plus, Loader2, GripVertical } from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
   searchCards,
   placeCard,
   clearSlot,
   setSlotStatus,
+  moveSlot,
   addPage,
 } from "@/app/actions/binders";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { CardImage, type CardIdentity } from "@/components/card-image";
+import { BinderCard } from "@/components/binder-card";
 
 const SLOTS_PER_PAGE = 9;
 
-type CardLite = {
-  id: string;
-  name: string;
-  number: string;
-  setName: string;
-  rarity: string | null;
-  imageSmall: string | null;
-};
+type CardLite = CardIdentity & { id: string };
 
 type SearchResult = CardLite & { priceEur: number | null };
 
@@ -61,6 +57,7 @@ export function BinderBuilder({
   const [searching, startSearch] = useTransition();
   const [, startMutate] = useTransition();
   const [activeCard, setActiveCard] = useState<SearchResult | null>(null);
+  const [activeWidth, setActiveWidth] = useState(170);
   const [target, setTarget] = useState<number | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -105,6 +102,27 @@ export function BinderBuilder({
     });
   }
 
+  function moveCard(from: number, to: number) {
+    if (from === to) return;
+    setSlots((prev) => {
+      const a = prev.find((s) => s.position === from);
+      const b = prev.find((s) => s.position === to);
+      if (!a) return prev;
+      return prev.map((s) => {
+        if (s.position === from)
+          return b?.card
+            ? { ...s, card: b.card, status: b.status, priceEur: b.priceEur }
+            : { ...s, card: null, status: "EMPTY", priceEur: null };
+        if (s.position === to)
+          return { ...s, card: a.card, status: a.status, priceEur: a.priceEur };
+        return s;
+      });
+    });
+    startMutate(() => {
+      moveSlot(binderId, from, to);
+    });
+  }
+
   function remove(position: number) {
     setSlots((prev) =>
       prev.map((s) =>
@@ -132,13 +150,27 @@ export function BinderBuilder({
 
   function handleDragStart(e: DragStartEvent) {
     setActiveCard((e.active.data.current?.card as SearchResult) ?? null);
+    // Match the overlay to the pocket card being lifted; search-thumb drags use a standard card size.
+    const id = String(e.active.id);
+    if (id.startsWith("placed-")) {
+      const node = document.querySelector(`[data-card-slot="${id.slice("placed-".length)}"]`);
+      const w = node?.getBoundingClientRect().width ?? 180;
+      setActiveWidth(Math.min(Math.max(w, 150), 300));
+    } else {
+      setActiveWidth(180);
+    }
   }
 
   function handleDragEnd(e: DragEndEvent) {
     setActiveCard(null);
-    const card = e.active.data.current?.card as SearchResult | undefined;
-    const position = e.over?.data.current?.position as number | undefined;
-    if (card && typeof position === "number") place(position, card);
+    const data = e.active.data.current;
+    const to = e.over?.data.current?.position as number | undefined;
+    if (typeof to !== "number" || !data) return;
+    if (typeof data.fromPosition === "number") {
+      moveCard(data.fromPosition, to); // rearrange within the binder
+    } else if (data.card) {
+      place(to, data.card as SearchResult); // place from search
+    }
   }
 
   // Clicking a result places into the selected target, else first empty slot.
@@ -170,7 +202,7 @@ export function BinderBuilder({
   );
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext id="binder-dnd" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* Binder pages */}
         <div className="space-y-8">
@@ -250,9 +282,14 @@ export function BinderBuilder({
       </div>
 
       <DragOverlay>
-        {activeCard?.imageSmall ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={activeCard.imageSmall} alt="" className="w-24 rotate-3 rounded-lg shadow-2xl" />
+        {activeCard ? (
+          <div className="drag-lift" style={{ width: activeWidth }}>
+            <CardImage
+              card={activeCard}
+              variant="plain"
+              className="shadow-2xl shadow-black/60 ring-1 ring-white/10"
+            />
+          </div>
         ) : null}
       </DragOverlay>
     </DndContext>
@@ -302,13 +339,22 @@ function SlotCell({
     id: `slot-${slot.position}`,
     data: { position: slot.position },
   });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({
+    id: `placed-${slot.position}`,
+    data: { fromPosition: slot.position, card: slot.card },
+  });
 
   return (
     <div
       ref={setNodeRef}
       onClick={slot.card ? undefined : onSelect}
       className={
-        "group relative aspect-[63/88] overflow-hidden rounded-lg border transition-all " +
+        "relative aspect-[63/88] overflow-hidden rounded-lg border transition-all " +
         (isOver
           ? "border-primary ring-2 ring-primary"
           : selected
@@ -318,41 +364,22 @@ function SlotCell({
       }
     >
       {slot.card ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={slot.card.imageSmall ?? ""}
-            alt={slot.card.name}
-            className="h-full w-full object-cover"
+        <div
+          ref={setDragRef}
+          {...listeners}
+          {...attributes}
+          data-card-slot={slot.position}
+          style={{ opacity: isDragging ? 0.25 : 1 }}
+          className="h-full w-full cursor-grab touch-none transition-opacity duration-150 active:cursor-grabbing"
+          title="Drag to move"
+        >
+          <BinderCard
+            card={slot.card}
+            status={slot.status === "OWNED" ? "OWNED" : "WANTED"}
+            onToggleStatus={onToggle}
+            onRemove={onRemove}
           />
-          <button
-            onClick={onRemove}
-            className="absolute right-1 top-1 grid size-6 place-items-center rounded-md bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
-            title="Remove card"
-          >
-            <X className="size-3.5" />
-          </button>
-          <button
-            onClick={onToggle}
-            className={
-              "absolute bottom-1 left-1 right-1 rounded-md px-1.5 py-1 text-[10px] font-semibold backdrop-blur transition-colors " +
-              (slot.status === "OWNED"
-                ? "bg-accent/85 text-accent-foreground"
-                : "bg-primary/85 text-primary-foreground")
-            }
-            title="Toggle owned / to source"
-          >
-            {slot.status === "OWNED" ? (
-              <span className="flex items-center justify-center gap-1">
-                <Check className="size-3" /> Owned
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-1">
-                <ShoppingBag className="size-3" /> Source
-              </span>
-            )}
-          </button>
-        </>
+        </div>
       ) : (
         <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground/60">
           {slot.position + 1}
@@ -377,8 +404,7 @@ function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void 
       <button {...listeners} {...attributes} className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing">
         <GripVertical className="size-4" />
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={card.imageSmall ?? ""} alt="" className="h-12 w-9 shrink-0 rounded object-cover" />
+      <CardImage card={card} variant="thumb" className="shrink-0" />
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
         <div className="truncate text-sm font-medium">{card.name}</div>
         <div className="truncate text-xs text-muted-foreground">

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { latestEurPrices } from "@/lib/pricing";
 import { formatEur } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { CardImage } from "@/components/card-image";
 
 const SLOTS_PER_PAGE = 9;
 
@@ -18,7 +19,9 @@ export default async function PublicBinderPage({
       owner: { select: { name: true } },
       slots: {
         orderBy: { position: "asc" },
-        include: { card: { select: { id: true, name: true, imageSmall: true } } },
+        include: {
+          card: { select: { id: true, name: true, number: true, setId: true, setName: true } },
+        },
       },
     },
   });
@@ -58,9 +61,8 @@ export default async function PublicBinderPage({
                   key={s.position}
                   className="aspect-[63/88] overflow-hidden rounded-lg border border-border"
                 >
-                  {s.card?.imageSmall ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.card.imageSmall} alt={s.card.name} className="h-full w-full object-cover" />
+                  {s.card ? (
+                    <CardImage card={s.card} variant="fill" />
                   ) : (
                     <div className="pocket-empty h-full w-full" />
                   )}

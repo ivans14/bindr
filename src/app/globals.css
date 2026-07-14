@@ -143,3 +143,16 @@
       transparent 16px
     );
 }
+
+/* drag overlay: smooth pick-up that eases into the tilt */
+@keyframes drag-lift {
+  from {
+    transform: scale(0.92) rotate(0deg);
+  }
+  to {
+    transform: scale(1.05) rotate(3deg);
+  }
+}
+.drag-lift {
+  animation: drag-lift 200ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}

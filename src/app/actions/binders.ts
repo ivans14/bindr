@@ -77,6 +77,31 @@ export async function clearSlot(binderId: string, position: number) {
   revalidatePath(`/binders/${binderId}`);
 }
 
+/** Move/swap a card between two pockets, preserving each card's owned/wanted status. */
+export async function moveSlot(binderId: string, from: number, to: number) {
+  await ownedBinder(binderId);
+  if (from === to) return;
+
+  const a = await prisma.binderSlot.findUnique({
+    where: { binderId_position: { binderId, position: from } },
+  });
+  const b = await prisma.binderSlot.findUnique({
+    where: { binderId_position: { binderId, position: to } },
+  });
+
+  await prisma.$transaction([
+    prisma.binderSlot.update({
+      where: { binderId_position: { binderId, position: from } },
+      data: { cardId: b?.cardId ?? null, status: b?.status ?? "EMPTY", note: b?.note ?? null },
+    }),
+    prisma.binderSlot.update({
+      where: { binderId_position: { binderId, position: to } },
+      data: { cardId: a?.cardId ?? null, status: a?.status ?? "EMPTY", note: a?.note ?? null },
+    }),
+  ]);
+  revalidatePath(`/binders/${binderId}`);
+}
+
 export async function setSlotStatus(
   binderId: string,
   position: number,
@@ -123,9 +148,8 @@ export async function searchCards(query: string) {
       id: true,
       name: true,
       number: true,
+      setId: true,
       setName: true,
-      rarity: true,
-      imageSmall: true,
     },
   });
 
