@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { latestEurPrices } from "@/lib/pricing";
+import { getCardFacets } from "@/app/actions/binders";
 import { BinderBuilder } from "@/components/binder-builder";
 import { Badge } from "@/components/ui/badge";
 
@@ -38,7 +39,7 @@ export default async function BuilderPage({
   if (!binder || binder.ownerId !== user.id) notFound();
 
   const cardIds = binder.slots.map((s) => s.cardId).filter((v): v is string => Boolean(v));
-  const prices = await latestEurPrices(cardIds);
+  const [prices, facets] = await Promise.all([latestEurPrices(cardIds), getCardFacets()]);
 
   const initialSlots = binder.slots.map((s) => ({
     position: s.position,
@@ -64,6 +65,7 @@ export default async function BuilderPage({
         binderId={binder.id}
         pageCount={binder.pageCount}
         initialSlots={initialSlots}
+        sets={facets.sets}
       />
     </div>
   );

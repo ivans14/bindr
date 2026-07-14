@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import type { CardFilters } from "@/lib/card-query";
+import { hasActiveFilters } from "@/lib/card-query";
 
 const SLOTS_PER_PAGE = 9;
 
@@ -136,21 +139,25 @@ export async function deleteBinder(binderId: string) {
   redirect("/binders");
 }
 
-/** Card search for the builder — matches name across synced sets. */
-export async function searchCards(query: string) {
-  const q = query.trim();
-  if (q.length < 2) return [];
+/** Card search for the builder — text query and/or structured filters. */
+export async function searchCards(filters: CardFilters) {
+  if (!hasActiveFilters(filters)) return [];
+
+  const where: Prisma.CardWhereInput = {};
+  const q = filters.query?.trim();
+  if (q && q.length >= 2) where.name = { contains: q, mode: "insensitive" };
+  if (filters.supertype) where.supertype = filters.supertype;
+  if (filters.setId) where.setId = filters.setId;
+  if (filters.artist?.trim()) where.artist = { contains: filters.artist.trim(), mode: "insensitive" };
+  if (filters.fullArt) where.isFullArt = true;
+  if (filters.types?.length) where.types = { hasSome: filters.types };
+  if (filters.subtypes?.length) where.subtypes = { hasSome: filters.subtypes };
+
   const cards = await prisma.card.findMany({
-    where: { name: { contains: q, mode: "insensitive" } },
+    where,
     orderBy: [{ name: "asc" }, { releasedAt: "desc" }],
-    take: 40,
-    select: {
-      id: true,
-      name: true,
-      number: true,
-      setId: true,
-      setName: true,
-    },
+    take: 60,
+    select: { id: true, name: true, number: true, setId: true, setName: true },
   });
 
   const prices = await prisma.priceSnapshot.findMany({
@@ -162,4 +169,157 @@ export async function searchCards(query: string) {
   for (const p of prices) if (!priceMap.has(p.cardId)) priceMap.set(p.cardId, Number(p.price));
 
   return cards.map((c) => ({ ...c, priceEur: priceMap.get(c.id) ?? null }));
+}
+
+/** Filter facets that are data-dependent (sets). Types/subtypes are a fixed domain. */
+export async function getCardFacets() {
+  const sets = await prisma.card.groupBy({
+    by: ["setId", "setName"],
+    orderBy: { setName: "asc" },
+  });
+  return { sets: sets.map((s) => ({ id: s.setId, name: s.setName })) };
+}
+
+/**
+ * Bulk-import cards into a binder from CSV text: `name,set,number,status` per line
+ * (status = owned|wanted, default wanted). Resolves each row to a card, fills empty
+ * slots in order, and adds pages as needed. Returns a summary incl. unmatched rows.
+ */
+export async function importCards(binderId: string, text: string) {
+  const binder = await ownedBinder(binderId);
+
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 500);
+  if (lines[0] && /name/i.test(lines[0]) && /(number|set)/i.test(lines[0])) lines.shift();
+
+  const rows = lines
+    .map((line) => {
+      const [name = "", set = "", number = "", status = ""] = line.split(",").map((s) => s.trim());
+      return {
+        raw: line,
+        name,
+        set,
+        number,
+        status: /^(o|owned)$/i.test(status) ? ("OWNED" as const) : ("WANTED" as const),
+      };
+    })
+    .filter((r) => r.name || r.number);
+
+  const IDENTITY = {
+    id: true,
+    name: true,
+    number: true,
+    setId: true,
+    setName: true,
+  } as const;
+
+  async function resolve(row: (typeof rows)[number]) {
+    const { name, set, number } = row;
+    if (number && set) {
+      const cs = await prisma.card.findMany({
+        where: {
+          number,
+          OR: [{ setId: set }, { setName: { contains: set, mode: "insensitive" } }],
+        },
+        take: 10,
+        select: IDENTITY,
+      });
+      if (cs.length === 1) return cs[0];
+      if (cs.length > 1 && name) {
+        const m = cs.find((c) => c.name.toLowerCase().includes(name.toLowerCase()));
+        return m ?? cs[0];
+      }
+      if (cs.length) return cs[0];
+    }
+    if (name && number) {
+      const cs = await prisma.card.findMany({
+        where: { number, name: { contains: name, mode: "insensitive" } },
+        take: 1,
+        select: IDENTITY,
+      });
+      if (cs.length) return cs[0];
+    }
+    if (name) {
+      const cs = await prisma.card.findMany({
+        where: { name: { contains: name, mode: "insensitive" } },
+        orderBy: { releasedAt: "desc" },
+        take: 1,
+        select: IDENTITY,
+      });
+      if (cs.length) return cs[0];
+    }
+    return null;
+  }
+
+  type Resolved = { card: Prisma.CardGetPayload<{ select: typeof IDENTITY }>; status: "OWNED" | "WANTED" };
+  const resolved: Resolved[] = [];
+  const unmatched: string[] = [];
+  for (const row of rows) {
+    const card = await resolve(row);
+    if (card) resolved.push({ card, status: row.status });
+    else unmatched.push(row.raw);
+  }
+
+  const slots = await prisma.binderSlot.findMany({
+    where: { binderId },
+    orderBy: { position: "asc" },
+  });
+  const emptyPositions = slots.filter((s) => !s.cardId).map((s) => s.position);
+  let nextNewPos = slots.length ? Math.max(...slots.map((s) => s.position)) + 1 : 0;
+
+  // Add pages until there is room for every resolved card.
+  let pagesAdded = 0;
+  const newSlots: { binderId: string; position: number }[] = [];
+  while (emptyPositions.length + newSlots.length < resolved.length) {
+    for (let i = 0; i < SLOTS_PER_PAGE; i++) {
+      newSlots.push({ binderId, position: nextNewPos });
+      emptyPositions.push(nextNewPos);
+      nextNewPos++;
+    }
+    pagesAdded++;
+  }
+  if (newSlots.length) {
+    await prisma.binderSlot.createMany({ data: newSlots });
+    await prisma.binder.update({
+      where: { id: binderId },
+      data: { pageCount: { increment: pagesAdded } },
+    });
+  }
+
+  emptyPositions.sort((a, b) => a - b);
+  await prisma.$transaction(
+    resolved.map((r, i) =>
+      prisma.binderSlot.update({
+        where: { binderId_position: { binderId, position: emptyPositions[i] } },
+        data: { cardId: r.card.id, status: r.status },
+      }),
+    ),
+  );
+
+  const priceRows = await prisma.priceSnapshot.findMany({
+    where: { cardId: { in: resolved.map((r) => r.card.id) }, source: "cardmarket", currency: "EUR" },
+    orderBy: { fetchedAt: "desc" },
+    select: { cardId: true, price: true },
+  });
+  const priceMap = new Map<string, number>();
+  for (const p of priceRows) if (!priceMap.has(p.cardId)) priceMap.set(p.cardId, Number(p.price));
+
+  const placements = resolved.map((r, i) => ({
+    position: emptyPositions[i],
+    status: r.status,
+    card: r.card,
+    priceEur: priceMap.get(r.card.id) ?? null,
+  }));
+
+  revalidatePath(`/binders/${binderId}`);
+  return {
+    placed: resolved.length,
+    unmatched,
+    pagesAdded,
+    pageCount: binder.pageCount + pagesAdded,
+    placements,
+  };
 }

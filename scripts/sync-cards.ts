@@ -23,6 +23,7 @@ type ApiCard = {
   supertype?: string;
   subtypes?: string[];
   types?: string[];
+  artist?: string;
   images?: { small?: string; large?: string };
   set?: { id: string; name: string; series?: string; releaseDate?: string };
   cardmarket?: { url?: string; prices?: Record<string, number | null> };
@@ -31,6 +32,14 @@ type ApiCard = {
     prices?: Record<string, { market?: number | null } | undefined>;
   };
 };
+
+// Heuristic: pokemontcg.io has no "full art" flag, so infer it from rarity/subtypes.
+const FULL_ART_RARITY =
+  /illustration|full art|special|ultra|rainbow|secret|hyper|gold|amazing|radiant|gallery|shiny|character/i;
+function computeFullArt(card: ApiCard): boolean {
+  if (card.rarity && FULL_ART_RARITY.test(card.rarity)) return true;
+  return (card.subtypes ?? []).some((s) => /vmax|vstar/i.test(s));
+}
 
 async function fetchJson(url: string) {
   const res = await fetch(url, {
@@ -94,6 +103,8 @@ async function syncSet(setId: string) {
           supertype: c.supertype ?? null,
           subtypes: c.subtypes ?? [],
           types: c.types ?? [],
+          artist: c.artist ?? null,
+          isFullArt: computeFullArt(c),
           imageSmall: c.images?.small ?? null,
           imageLarge: c.images?.large ?? null,
           cardmarketUrl: c.cardmarket?.url ?? null,
@@ -103,6 +114,11 @@ async function syncSet(setId: string) {
         update: {
           name: c.name,
           rarity: c.rarity ?? null,
+          supertype: c.supertype ?? null,
+          subtypes: c.subtypes ?? [],
+          types: c.types ?? [],
+          artist: c.artist ?? null,
+          isFullArt: computeFullArt(c),
           imageSmall: c.images?.small ?? null,
           imageLarge: c.images?.large ?? null,
           cardmarketUrl: c.cardmarket?.url ?? null,

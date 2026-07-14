@@ -120,8 +120,10 @@ model Card {
   setSeries     String?
   rarity        String?
   supertype     String? // Pokémon / Trainer / Energy
-  subtypes      String[]
-  types         String[]
+  subtypes      String[] // e.g. Basic, Stage 2, ex, V, Supporter, Item, Stadium, Pokémon Tool
+  types         String[] // energy types: Fire, Water, …
+  artist        String?
+  isFullArt     Boolean   @default(false) // heuristic from rarity/subtypes (illustration/alt/secret art)
   imageSmall    String?
   imageLarge    String?
   cardmarketUrl String?
@@ -135,6 +137,8 @@ model Card {
 
   @@index([name])
   @@index([setId])
+  @@index([supertype])
+  @@index([artist])
   @@map("card")
 }
 
