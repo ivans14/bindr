@@ -416,7 +416,7 @@ export function BinderBuilder({
             {shownPages.map((pageSlots, i) => {
               const p = firstPage + i;
               return (
-                <div key={p} className={cn("w-full", spread ? "max-w-sm" : "max-w-lg")}>
+                <div key={p} className={cn("w-full", spread ? "max-w-md" : "max-w-3xl")}>
                   <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
                     Page {p + 1}
                   </div>

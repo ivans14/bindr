@@ -206,12 +206,20 @@ async function backfillNameEn() {
 
 async function main() {
   const args = process.argv.slice(2);
-  const targets = args.length
-    ? args.map((a) => {
-        const [lang, setId] = a.split(":");
-        return { lang, sets: [setId] };
-      })
-    : DEFAULT_TARGETS;
+  let targets: { lang: string; sets: string[] }[];
+  if (args.includes("--all-en")) {
+    // Every English set in the catalog.
+    const all = (await j<{ id: string }[]>(`${BASE}/en/sets`)) ?? [];
+    targets = [{ lang: "en", sets: all.map((s) => s.id) }];
+    console.log(`--all-en: ${all.length} English sets`);
+  } else if (args.length) {
+    targets = args.map((a) => {
+      const [lang, setId] = a.split(":");
+      return { lang, sets: [setId] };
+    });
+  } else {
+    targets = DEFAULT_TARGETS;
+  }
 
   let total = 0;
   for (const { lang, sets } of targets) {
