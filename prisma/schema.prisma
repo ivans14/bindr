@@ -54,6 +54,9 @@ model User {
   role             Role     @default(USER)
   tier             Tier     @default(FREE)
   stripeCustomerId String?  @unique
+  stripeSubscriptionId String?
+  subscriptionStatus   String? // active | trialing | past_due | canceled …
+  currentPeriodEnd     DateTime?
   preferredLocale  String   @default("en")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

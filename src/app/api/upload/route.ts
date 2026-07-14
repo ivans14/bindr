@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { getSession } from "@/lib/session";
+import { getSession, isPaid } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -10,6 +10,12 @@ const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isPaid(session.user)) {
+    return NextResponse.json(
+      { error: "Custom uploads are a Collector feature — upgrade to unlock." },
+      { status: 403 },
+    );
+  }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(

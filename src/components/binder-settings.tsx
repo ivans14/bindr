@@ -17,10 +17,12 @@ export function BinderSettings({
   binderId,
   title,
   visibility,
+  isPaid,
 }: {
   binderId: string;
   title: string;
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
+  isPaid: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -77,11 +79,13 @@ export function BinderSettings({
       <select
         value={vis}
         onChange={(e) => changeVisibility(e.target.value as typeof vis)}
+        title={isPaid ? undefined : "Public sharing is a Collector feature"}
         className="h-8 rounded-lg border border-input bg-background/60 px-2 text-sm"
       >
         {VIS.map((v) => (
-          <option key={v.value} value={v.value}>
+          <option key={v.value} value={v.value} disabled={!isPaid && v.value !== "PRIVATE"}>
             {v.label}
+            {!isPaid && v.value !== "PRIVATE" ? " (Collector)" : ""}
           </option>
         ))}
       </select>

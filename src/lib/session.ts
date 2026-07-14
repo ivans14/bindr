@@ -13,6 +13,11 @@ export async function requireUser() {
   return session.user;
 }
 
+/** Collector-tier access. Admins always count as paid (for ops/testing). */
+export function isPaid(user: { tier?: string | null; role?: string | null }): boolean {
+  return user.tier === "PAID" || user.role === "ADMIN";
+}
+
 /** Server-side gate for /ops: user must have role ADMIN. */
 export async function requireAdmin() {
   const session = await getSession();

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireUser, isPaid } from "@/lib/session";
 import type { CardFilters } from "@/lib/card-query";
 import { hasActiveFilters } from "@/lib/card-query";
 
@@ -161,7 +161,11 @@ const metaSchema = z.object({
 
 export async function updateBinderMeta(input: z.infer<typeof metaSchema>) {
   const { binderId, ...rest } = metaSchema.parse(input);
-  await ownedBinder(binderId);
+  const user = await requireUser();
+  const binder = await prisma.binder.findUnique({ where: { id: binderId } });
+  if (!binder || binder.ownerId !== user.id) throw new Error("Not found");
+  // Public/unlisted showcases are Collector-only — ignore the change for free users.
+  if (rest.visibility && rest.visibility !== "PRIVATE" && !isPaid(user)) delete rest.visibility;
   await prisma.binder.update({ where: { id: binderId }, data: rest });
   revalidatePath(`/binders/${binderId}`);
 }

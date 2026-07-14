@@ -38,6 +38,9 @@ export async function SiteHeader() {
               <Button asChild variant="ghost" size="sm">
                 <Link href="/orders">Orders</Link>
               </Button>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/account">Account</Link>
+              </Button>
               {isAdmin && (
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/ops">Ops</Link>

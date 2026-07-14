@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
-import { requireUser, requireAdmin } from "@/lib/session";
+import { requireUser, requireAdmin, isPaid } from "@/lib/session";
 import { latestEurPrices } from "@/lib/pricing";
 import { quote, FULFILLMENT_STATES } from "@/lib/fulfillment";
 import { emailOrderRequested, emailOrderShipped } from "@/lib/email";
@@ -66,6 +66,7 @@ const addressSchema = z.object({
 export async function requestFulfillment(input: z.infer<typeof addressSchema>) {
   const data = addressSchema.parse(input);
   const user = await requireUser();
+  if (!isPaid(user)) return { error: "Physical builds are a Collector feature — upgrade to unlock." };
 
   const binder = await prisma.binder.findUnique({
     where: { id: data.binderId },

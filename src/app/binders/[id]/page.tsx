@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireUser } from "@/lib/session";
+import { requireUser, isPaid } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { latestEurPrices } from "@/lib/pricing";
 import { getCardFacets } from "@/app/actions/binders";
@@ -15,6 +15,7 @@ export default async function BuilderPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
+  const paid = isPaid(user);
 
   const binder = await prisma.binder.findUnique({
     where: { id },
@@ -64,6 +65,7 @@ export default async function BuilderPage({
           binderId={binder.id}
           title={binder.title}
           visibility={binder.visibility}
+          isPaid={paid}
         />
       </div>
 
@@ -73,6 +75,7 @@ export default async function BuilderPage({
         initialSlots={initialSlots}
         sets={facets.sets}
         theme={binder.theme}
+        isPaid={paid}
       />
     </div>
   );

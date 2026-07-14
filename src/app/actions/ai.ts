@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireUser, isPaid } from "@/lib/session";
 import { latestEurPrices } from "@/lib/pricing";
 
 const SLOTS_PER_PAGE = 9;
@@ -152,6 +152,7 @@ async function runAgent(apiKey: string, prompt: string, capacity: number, emptyC
 /** Assemble a binder from a description; places the proposal as an editable draft. */
 export async function assembleBinder(binderId: string, prompt: string) {
   const user = await requireUser();
+  if (!isPaid(user)) return { error: "AI assembly is a Collector feature — upgrade to unlock." };
   const binder = await prisma.binder.findUnique({
     where: { id: binderId },
     include: { slots: true },

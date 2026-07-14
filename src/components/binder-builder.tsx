@@ -74,12 +74,14 @@ export function BinderBuilder({
   initialSlots,
   sets,
   theme,
+  isPaid,
 }: {
   binderId: string;
   pageCount: number;
   initialSlots: Slot[];
   sets: { id: string; name: string; language: string }[];
   theme: string;
+  isPaid: boolean;
 }) {
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [pages, setPages] = useState(pageCount);
@@ -399,15 +401,21 @@ export function BinderBuilder({
               <Stat label="Owned" value={formatEur(totals.owned)} />
               <Stat label="To source" value={formatEur(totals.wanted)} accent />
             </div>
-            {totals.wanted > 0 ? (
+            {totals.wanted <= 0 ? (
+              <Button className="mt-4 w-full gap-2" disabled title="Mark cards to source first">
+                <ShoppingBag className="size-4" /> Request build
+              </Button>
+            ) : isPaid ? (
               <Button asChild className="mt-4 w-full gap-2">
                 <Link href={`/binders/${binderId}/request`}>
                   <ShoppingBag className="size-4" /> Request build
                 </Link>
               </Button>
             ) : (
-              <Button className="mt-4 w-full gap-2" disabled title="Mark cards to source first">
-                <ShoppingBag className="size-4" /> Request build
+              <Button asChild variant="outline" className="mt-4 w-full gap-2">
+                <Link href="/account">
+                  <Sparkles className="size-4 text-primary" /> Request build — Collector
+                </Link>
               </Button>
             )}
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
@@ -461,7 +469,7 @@ export function BinderBuilder({
             </div>
           </div>
 
-          <AiAssemblePanel onAssemble={assembleFromAi} />
+          <AiAssemblePanel onAssemble={assembleFromAi} isPaid={isPaid} />
 
           <SleevesPanel
             onPick={(key) => {
@@ -473,6 +481,7 @@ export function BinderBuilder({
           />
 
           <CustomImagePanel
+            isPaid={isPaid}
             onUploaded={(url) => {
               const pos = nextEmpty();
               if (pos == null) return;
@@ -654,7 +663,13 @@ function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void 
 
 type AssembleResult = Awaited<ReturnType<typeof assembleBinder>>;
 
-function AiAssemblePanel({ onAssemble }: { onAssemble: (prompt: string) => Promise<AssembleResult> }) {
+function AiAssemblePanel({
+  onAssemble,
+  isPaid,
+}: {
+  onAssemble: (prompt: string) => Promise<AssembleResult>;
+  isPaid: boolean;
+}) {
   const [open, setOpen] = useState(true);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -682,7 +697,19 @@ function AiAssemblePanel({ onAssemble }: { onAssemble: (prompt: string) => Promi
       >
         <Wand2 className="size-4 text-primary" /> AI assemble
       </button>
-      {open && (
+      {open && !isPaid && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Describe a binder and the AI drafts it for you — a Collector feature.
+          </p>
+          <Button asChild size="sm" className="w-full gap-1.5">
+            <Link href="/account">
+              <Sparkles className="size-4" /> Upgrade to Collector
+            </Link>
+          </Button>
+        </div>
+      )}
+      {open && isPaid && (
         <div className="mt-3 space-y-2">
           <textarea
             value={prompt}
@@ -744,7 +771,13 @@ function SleevesPanel({ onPick }: { onPick: (key: string) => void }) {
   );
 }
 
-function CustomImagePanel({ onUploaded }: { onUploaded: (url: string) => void }) {
+function CustomImagePanel({
+  onUploaded,
+  isPaid,
+}: {
+  onUploaded: (url: string) => void;
+  isPaid: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -780,7 +813,19 @@ function CustomImagePanel({ onUploaded }: { onUploaded: (url: string) => void })
       >
         <ImagePlus className="size-4" /> Custom image
       </button>
-      {open && (
+      {open && !isPaid && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Upload your own art (proxies, things to print) — a Collector feature.
+          </p>
+          <Button asChild size="sm" className="w-full gap-1.5">
+            <Link href="/account">
+              <Sparkles className="size-4" /> Upgrade to Collector
+            </Link>
+          </Button>
+        </div>
+      )}
+      {open && isPaid && (
         <div className="mt-3 space-y-2">
           <p className="text-[11px] text-muted-foreground">
             Upload your own art (PNG/JPG/WebP, ≤ 4 MB) into the selected or next empty pocket —

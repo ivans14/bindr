@@ -28,15 +28,32 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const orderId = session.metadata?.orderId;
-    if (orderId) {
+
+    if (session.mode === "subscription") {
+      // Collector subscription started.
+      const userId = session.metadata?.userId;
+      const subId = typeof session.subscription === "string" ? session.subscription : null;
+      const customerId = typeof session.customer === "string" ? session.customer : null;
+      if (userId) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            tier: "PAID",
+            subscriptionStatus: "active",
+            stripeSubscriptionId: subId,
+            ...(customerId ? { stripeCustomerId: customerId } : {}),
+          },
+        });
+      }
+    } else if (session.metadata?.orderId) {
+      // Fulfillment order paid.
+      const orderId = session.metadata.orderId;
       const paymentIntent =
         typeof session.payment_intent === "string" ? session.payment_intent : null;
       await prisma.fulfillmentOrder.update({
         where: { id: orderId },
         data: { paidAt: new Date(), stripePaymentIntentId: paymentIntent },
       });
-      // Advance to PAID only if not already moved along by ops.
       await prisma.fulfillmentOrder.updateMany({
         where: { id: orderId, state: { in: ["REQUESTED", "QUOTED"] } },
         data: { state: "PAID" },
@@ -52,6 +69,25 @@ export async function POST(req: Request) {
           total: Number(order.quotedTotal ?? 0),
         });
       }
+    }
+  } else if (
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const sub = event.data.object as Stripe.Subscription;
+    const customerId = typeof sub.customer === "string" ? sub.customer : null;
+    if (customerId) {
+      const active = sub.status === "active" || sub.status === "trialing";
+      const periodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+      await prisma.user.updateMany({
+        where: { stripeCustomerId: customerId },
+        data: {
+          tier: active ? "PAID" : "FREE",
+          subscriptionStatus: sub.status,
+          stripeSubscriptionId: sub.id,
+          currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        },
+      });
     }
   }
 
