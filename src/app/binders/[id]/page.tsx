@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { latestEurPrices } from "@/lib/pricing";
 import { getCardFacets } from "@/app/actions/binders";
 import { BinderBuilder } from "@/components/binder-builder";
-import { Badge } from "@/components/ui/badge";
+import { BinderSettings } from "@/components/binder-settings";
 
 export default async function BuilderPage({
   params,
@@ -58,9 +58,13 @@ export default async function BuilderPage({
       >
         <ArrowLeft className="size-4" /> All binders
       </Link>
-      <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl">{binder.title}</h1>
-        <Badge variant="muted">{binder.visibility.toLowerCase()}</Badge>
+        <BinderSettings
+          binderId={binder.id}
+          title={binder.title}
+          visibility={binder.visibility}
+        />
       </div>
 
       <BinderBuilder
