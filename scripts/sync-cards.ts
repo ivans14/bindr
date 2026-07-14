@@ -31,6 +31,7 @@ type FullCard = {
   category?: string;
   rarity?: string;
   types?: string[];
+  dexId?: number[];
   stage?: string;
   suffix?: string;
   trainerType?: string;
@@ -112,6 +113,9 @@ async function syncSet(lang: string, setId: string): Promise<number> {
       tcgdexId: c.id,
       language: lang,
       name: c.name ?? brief.name ?? c.id,
+      // Western languages keep English species names; JA/others get backfilled by dexId.
+      nameEn: lang === "en" || lang === "es" ? (c.name ?? brief.name ?? null) : null,
+      dexId: c.dexId?.[0] ?? null,
       number: c.localId ?? brief.localId ?? "",
       setId,
       setName,
@@ -144,6 +148,55 @@ async function syncSet(lang: string, setId: string): Promise<number> {
   return count;
 }
 
+// Foreign sets that share numbering with an EN set over their base range (`shared`).
+// Only the shared main-set numbers align; special/secret numbers above it diverge.
+const SIBLING_SET: Record<string, { en: string; shared: number }> = {
+  // 151 set: cards #001–151 follow National Dex order in every language (aligned);
+  // Trainers/Energy/special-art numbers above that diverge, so cap at 151.
+  SV2a: { en: "sv03.5", shared: 151 },
+};
+
+/** Backfill English name aliases on non-EN cards. */
+async function backfillNameEn() {
+  // 1) Exact: sibling set + collector number within the shared range (handles ex cards
+  //    that lack a dexId), but never the divergent special-numbered cards.
+  for (const [foreignSet, { en: enSet, shared }] of Object.entries(SIBLING_SET)) {
+    const enCards = await prisma.card.findMany({
+      where: { language: "en", setId: enSet },
+      select: { number: true, name: true },
+    });
+    const byNumber = new Map(enCards.map((c) => [c.number, c.name]));
+    const foreign = await prisma.card.findMany({
+      where: { setId: foreignSet, nameEn: null },
+      select: { id: true, number: true },
+    });
+    for (const c of foreign) {
+      const n = parseInt(c.number, 10);
+      if (!Number.isFinite(n) || n > shared) continue;
+      const en = byNumber.get(c.number);
+      if (en) await prisma.card.update({ where: { id: c.id }, data: { nameEn: en } });
+    }
+  }
+
+  // 2) Fallback: national Pokédex number → English species name.
+  const en = await prisma.card.findMany({
+    where: { language: "en", dexId: { not: null } },
+    select: { dexId: true, name: true },
+  });
+  const species = new Map<number, string>();
+  for (const c of en) {
+    const d = c.dexId!;
+    const cur = species.get(d);
+    if (!cur || c.name.length < cur.length) species.set(d, c.name); // shortest ≈ species name
+  }
+  let n = 0;
+  for (const [dexId, name] of species) {
+    const r = await prisma.card.updateMany({ where: { dexId, nameEn: null }, data: { nameEn: name } });
+    n += r.count;
+  }
+  console.log(`Backfilled English names on ${n} cards from ${species.size} Pokédex entries.`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const targets = args.length
@@ -161,6 +214,7 @@ async function main() {
       console.log(`  ${n ? "✓" : "✗"} ${lang}:${setId} — ${n} cards`);
     }
   }
+  await backfillNameEn();
   console.log(`Done. ${total} card rows synced.`);
 }
 

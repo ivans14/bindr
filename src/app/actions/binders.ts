@@ -179,7 +179,11 @@ export async function searchCards(filters: CardFilters) {
 
   const where: Prisma.CardWhereInput = { language: filters.language || "en" };
   const q = filters.query?.trim();
-  if (q && q.length >= 2) where.name = { contains: q, mode: "insensitive" };
+  if (q && q.length >= 2)
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      { nameEn: { contains: q, mode: "insensitive" } }, // English search for localized cards
+    ];
   if (filters.supertype) where.supertype = filters.supertype;
   if (filters.setId) where.setId = filters.setId;
   if (filters.artist?.trim()) where.artist = { contains: filters.artist.trim(), mode: "insensitive" };

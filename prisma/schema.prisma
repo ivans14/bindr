@@ -116,6 +116,8 @@ model Card {
   tcgdexId   String // raw TCGdex id, e.g. "sv03.5-006"
   language   String    @default("en") // en | es | fr | de | it | pt | ja | ko …
   name       String // localized
+  nameEn     String? // English name alias so non-EN cards are searchable in English
+  dexId      Int? // primary national Pokédex number (for cross-language name mapping)
   number     String // collector number within set (TCGdex localId)
   setId      String
   setName    String
@@ -136,6 +138,7 @@ model Card {
 
   @@unique([tcgdexId, language])
   @@index([name])
+  @@index([nameEn])
   @@index([language])
   @@index([supertype])
   @@index([artist])
@@ -210,7 +213,9 @@ model FulfillmentOrder {
   serviceFee            Decimal?         @db.Decimal(10, 2)
   shippingFee           Decimal?         @db.Decimal(10, 2)
   quotedTotal           Decimal?         @db.Decimal(10, 2) // cards + fee + shipping
+  stripeSessionId       String?
   stripePaymentIntentId String?
+  paidAt                DateTime?
   // Frozen shipping address (snapshot at request time)
   shipName    String?
   shipLine1   String?
@@ -229,6 +234,15 @@ model FulfillmentOrder {
   @@index([userId])
   @@index([state])
   @@map("fulfillment_order")
+}
+
+// Processed Stripe webhook event ids — idempotency guard.
+model StripeEvent {
+  id        String   @id // Stripe event id
+  type      String
+  createdAt DateTime @default(now())
+
+  @@map("stripe_event")
 }
 
 // One row per card to source in an order (snapshot — the binder can change later).

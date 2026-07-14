@@ -3,9 +3,53 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { stripe } from "@/lib/stripe";
 import { requireUser, requireAdmin } from "@/lib/session";
 import { latestEurPrices } from "@/lib/pricing";
 import { quote, FULFILLMENT_STATES } from "@/lib/fulfillment";
+
+function appBase() {
+  return process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL || "http://localhost:3000";
+}
+
+/** Create a Stripe Checkout session to pay for a fulfillment order. */
+export async function createCheckout(orderId: string) {
+  const user = await requireUser();
+  const order = await prisma.fulfillmentOrder.findUnique({
+    where: { id: orderId },
+    include: { binder: { select: { title: true } } },
+  });
+  if (!order || order.userId !== user.id) return { error: "Order not found." };
+  if (!stripe) return { error: "Payment isn't configured yet." };
+  if (order.paidAt) return { error: "This order is already paid." };
+
+  const amount = Math.round(Number(order.quotedTotal ?? 0) * 100);
+  if (amount <= 0) return { error: "Nothing to charge." };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: user.email,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "eur",
+          unit_amount: amount,
+          product_data: { name: `bindr build — ${order.binder.title}` },
+        },
+      },
+    ],
+    success_url: `${appBase()}/orders/${orderId}?paid=1`,
+    cancel_url: `${appBase()}/orders/${orderId}`,
+    metadata: { orderId },
+  });
+
+  await prisma.fulfillmentOrder.update({
+    where: { id: orderId },
+    data: { stripeSessionId: session.id },
+  });
+  return { ok: true as const, url: session.url };
+}
 
 const addressSchema = z.object({
   binderId: z.string(),

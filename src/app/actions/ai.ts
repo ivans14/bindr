@@ -68,8 +68,13 @@ type SearchInput = {
 
 async function searchTool(input: SearchInput) {
   const where: Prisma.CardWhereInput = { language: input.language || "en" };
-  if (input.query && input.query.trim().length >= 2)
-    where.name = { contains: input.query.trim(), mode: "insensitive" };
+  if (input.query && input.query.trim().length >= 2) {
+    const q = input.query.trim();
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      { nameEn: { contains: q, mode: "insensitive" } },
+    ];
+  }
   if (input.supertype) where.supertype = input.supertype;
   if (input.setId) where.setId = input.setId;
   if (input.artist?.trim()) where.artist = { contains: input.artist.trim(), mode: "insensitive" };

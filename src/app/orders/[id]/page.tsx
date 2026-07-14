@@ -8,6 +8,7 @@ import { STATE_LABEL, PROGRESS_STEPS, type FulfillmentState } from "@/lib/fulfil
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CardImage } from "@/components/card-image";
+import { PayButton } from "@/components/pay-button";
 import { cn } from "@/lib/utils";
 
 export default async function OrderStatusPage({
@@ -27,6 +28,8 @@ export default async function OrderStatusPage({
   const state = order.state as FulfillmentState;
   const terminal = state === "CANCELLED" || state === "REFUNDED";
   const currentStep = PROGRESS_STEPS.indexOf(state === "PARTIALLY_SOURCED" ? "SOURCED" : state);
+  const paid = Boolean(order.paidAt);
+  const payable = !paid && !terminal && (state === "REQUESTED" || state === "QUOTED");
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -95,6 +98,15 @@ export default async function OrderStatusPage({
             <div className="my-1.5 border-t border-border" />
             <Row label="Total" value={formatEur(Number(order.quotedTotal ?? 0))} strong />
           </dl>
+          {paid ? (
+            <div className="mt-3 flex items-center gap-1.5 text-sm text-accent">
+              <Check className="size-4" /> Paid
+            </div>
+          ) : payable ? (
+            <div className="mt-4">
+              <PayButton orderId={order.id} amount={formatEur(Number(order.quotedTotal ?? 0))} />
+            </div>
+          ) : null}
         </Card>
 
         <Card className="p-5">
