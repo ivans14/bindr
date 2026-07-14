@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
+import { emailOrderPaid } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,17 @@ export async function POST(req: Request) {
         where: { id: orderId, state: { in: ["REQUESTED", "QUOTED"] } },
         data: { state: "PAID" },
       });
+      const order = await prisma.fulfillmentOrder.findUnique({
+        where: { id: orderId },
+        include: { user: { select: { email: true } }, binder: { select: { title: true } } },
+      });
+      if (order) {
+        await emailOrderPaid(order.user.email, {
+          id: order.id,
+          binderTitle: order.binder.title,
+          total: Number(order.quotedTotal ?? 0),
+        });
+      }
     }
   }
 

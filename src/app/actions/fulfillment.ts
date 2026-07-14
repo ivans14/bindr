@@ -7,6 +7,7 @@ import { stripe } from "@/lib/stripe";
 import { requireUser, requireAdmin } from "@/lib/session";
 import { latestEurPrices } from "@/lib/pricing";
 import { quote, FULFILLMENT_STATES } from "@/lib/fulfillment";
+import { emailOrderRequested, emailOrderShipped } from "@/lib/email";
 
 function appBase() {
   return process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -114,6 +115,13 @@ export async function requestFulfillment(input: z.infer<typeof addressSchema>) {
     },
   });
 
+  await emailOrderRequested(user.email, {
+    id: order.id,
+    binderTitle: binder.title,
+    itemCount: wanted.length,
+    total: q.total,
+  });
+
   return { ok: true as const, orderId: order.id };
 }
 
@@ -137,9 +145,16 @@ export async function setItemSourced(orderId: string, itemId: string, sourced: b
 
 export async function setTracking(orderId: string, carrier: string, code: string) {
   await requireAdmin();
-  await prisma.fulfillmentOrder.update({
+  const order = await prisma.fulfillmentOrder.update({
     where: { id: orderId },
     data: { carrier: carrier || null, trackingCode: code || null, state: "SHIPPED" },
+    include: { user: { select: { email: true } }, binder: { select: { title: true } } },
+  });
+  await emailOrderShipped(order.user.email, {
+    id: order.id,
+    binderTitle: order.binder.title,
+    carrier: carrier || null,
+    tracking: code || null,
   });
   revalidatePath(`/ops/${orderId}`);
   revalidatePath("/ops");
