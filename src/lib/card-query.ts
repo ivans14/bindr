@@ -2,6 +2,7 @@
 
 export type CardFilters = {
   query?: string;
+  language?: string; // en | es | ja … (context, not a result-triggering filter)
   supertype?: string; // Pokémon | Trainer | Energy
   types?: string[]; // energy types
   subtypes?: string[]; // Basic, Stage 2, ex, Supporter, Stadium, …
@@ -9,6 +10,15 @@ export type CardFilters = {
   setId?: string;
   fullArt?: boolean;
 };
+
+// Languages we have synced data for (TCGdex). Korean is data-sparse / no prices.
+export const LANGUAGES = [
+  { code: "en", label: "EN" },
+  { code: "es", label: "ES" },
+  { code: "ja", label: "日本語" },
+] as const;
+
+export const DEFAULT_LANGUAGE = "en";
 
 export const SUPERTYPES = ["Pokémon", "Trainer", "Energy"] as const;
 

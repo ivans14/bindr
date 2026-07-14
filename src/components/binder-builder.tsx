@@ -23,7 +23,7 @@ import {
   addPage,
   importCards,
 } from "@/app/actions/binders";
-import { type CardFilters as Filters, hasActiveFilters } from "@/lib/card-query";
+import { type CardFilters as Filters, hasActiveFilters, DEFAULT_LANGUAGE } from "@/lib/card-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CardImage, type CardIdentity } from "@/components/card-image";
@@ -54,11 +54,11 @@ export function BinderBuilder({
   binderId: string;
   pageCount: number;
   initialSlots: Slot[];
-  sets: { id: string; name: string }[];
+  sets: { id: string; name: string; language: string }[];
 }) {
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [pages, setPages] = useState(pageCount);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({ language: DEFAULT_LANGUAGE });
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, startSearch] = useTransition();
   const [, startMutate] = useTransition();

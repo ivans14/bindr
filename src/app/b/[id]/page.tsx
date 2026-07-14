@@ -20,7 +20,7 @@ export default async function PublicBinderPage({
       slots: {
         orderBy: { position: "asc" },
         include: {
-          card: { select: { id: true, name: true, number: true, setId: true, setName: true } },
+          card: { select: { id: true, name: true, number: true, setName: true, imageBase: true } },
         },
       },
     },

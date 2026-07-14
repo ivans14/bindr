@@ -8,6 +8,8 @@ import {
   POKEMON_TYPES,
   SUBTYPES,
   TYPE_COLOR,
+  LANGUAGES,
+  DEFAULT_LANGUAGE,
   hasActiveFilters,
 } from "@/lib/card-query";
 import { cn } from "@/lib/utils";
@@ -27,15 +29,36 @@ export function CardFilters({
   onChange,
 }: {
   value: CardFilters;
-  sets: { id: string; name: string }[];
+  sets: { id: string; name: string; language: string }[];
   onChange: (next: CardFilters) => void;
 }) {
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<CardFilters>) => onChange({ ...value, ...patch });
   const active = hasActiveFilters({ ...value, query: undefined }); // ignore text query here
+  const lang = value.language ?? DEFAULT_LANGUAGE;
+  const langSets = sets.filter((s) => s.language === lang);
 
   return (
     <div className="rounded-lg border border-border bg-background/40">
+      {/* Language — primary context, always visible */}
+      <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
+        <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">Lang</span>
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.code}
+            onClick={() => set({ language: l.code, setId: undefined })}
+            className={cn(
+              chip,
+              lang === l.code
+                ? "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between px-3 py-2">
         <button
           onClick={() => setOpen((o) => !o)}
@@ -48,9 +71,7 @@ export function CardFilters({
         </button>
         {active && (
           <button
-            onClick={() =>
-              onChange({ query: value.query }) /* keep text, clear structured filters */
-            }
+            onClick={() => onChange({ query: value.query, language: value.language })}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <X className="size-3" /> Clear
@@ -60,7 +81,6 @@ export function CardFilters({
 
       {open && (
         <div className="space-y-3 border-t border-border px-3 py-3">
-          {/* Category */}
           <Group label="Category">
             {SUPERTYPES.map((s) => (
               <button
@@ -78,7 +98,6 @@ export function CardFilters({
             ))}
           </Group>
 
-          {/* Pokémon type */}
           <Group label="Type">
             {POKEMON_TYPES.map((t) => {
               const on = value.types?.includes(t);
@@ -86,7 +105,12 @@ export function CardFilters({
                 <button
                   key={t}
                   onClick={() => set({ types: toggle(value.types, t) })}
-                  className={cn(chip, on ? "border-transparent text-white" : "border-border text-muted-foreground hover:text-foreground")}
+                  className={cn(
+                    chip,
+                    on
+                      ? "border-transparent text-white"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
                   style={on ? { background: TYPE_COLOR[t] } : undefined}
                 >
                   <span
@@ -99,7 +123,6 @@ export function CardFilters({
             })}
           </Group>
 
-          {/* Card type / subtype */}
           <Group label="Card type">
             {SUBTYPES.map((s) => {
               const on = value.subtypes?.includes(s);
@@ -120,7 +143,6 @@ export function CardFilters({
             })}
           </Group>
 
-          {/* Full art + set + artist */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => set({ fullArt: value.fullArt ? undefined : true })}
@@ -142,7 +164,7 @@ export function CardFilters({
               className="h-9 w-full rounded-lg border border-input bg-background/60 px-2 text-sm"
             >
               <option value="">All sets</option>
-              {sets.map((s) => (
+              {langSets.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>

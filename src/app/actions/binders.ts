@@ -143,7 +143,7 @@ export async function deleteBinder(binderId: string) {
 export async function searchCards(filters: CardFilters) {
   if (!hasActiveFilters(filters)) return [];
 
-  const where: Prisma.CardWhereInput = {};
+  const where: Prisma.CardWhereInput = { language: filters.language || "en" };
   const q = filters.query?.trim();
   if (q && q.length >= 2) where.name = { contains: q, mode: "insensitive" };
   if (filters.supertype) where.supertype = filters.supertype;
@@ -157,7 +157,7 @@ export async function searchCards(filters: CardFilters) {
     where,
     orderBy: [{ name: "asc" }, { releasedAt: "desc" }],
     take: 60,
-    select: { id: true, name: true, number: true, setId: true, setName: true },
+    select: { id: true, name: true, number: true, setName: true, imageBase: true },
   });
 
   const prices = await prisma.priceSnapshot.findMany({
@@ -171,13 +171,13 @@ export async function searchCards(filters: CardFilters) {
   return cards.map((c) => ({ ...c, priceEur: priceMap.get(c.id) ?? null }));
 }
 
-/** Filter facets that are data-dependent (sets). Types/subtypes are a fixed domain. */
+/** Filter facets that are data-dependent (sets, per language). */
 export async function getCardFacets() {
   const sets = await prisma.card.groupBy({
-    by: ["setId", "setName"],
+    by: ["setId", "setName", "language"],
     orderBy: { setName: "asc" },
   });
-  return { sets: sets.map((s) => ({ id: s.setId, name: s.setName })) };
+  return { sets: sets.map((s) => ({ id: s.setId, name: s.setName, language: s.language })) };
 }
 
 /**
@@ -212,15 +212,19 @@ export async function importCards(binderId: string, text: string) {
     id: true,
     name: true,
     number: true,
-    setId: true,
     setName: true,
+    imageBase: true,
   } as const;
+
+  // CSV import resolves against English cards for determinism.
+  const LANG = { language: "en" } as const;
 
   async function resolve(row: (typeof rows)[number]) {
     const { name, set, number } = row;
     if (number && set) {
       const cs = await prisma.card.findMany({
         where: {
+          ...LANG,
           number,
           OR: [{ setId: set }, { setName: { contains: set, mode: "insensitive" } }],
         },
@@ -236,7 +240,7 @@ export async function importCards(binderId: string, text: string) {
     }
     if (name && number) {
       const cs = await prisma.card.findMany({
-        where: { number, name: { contains: name, mode: "insensitive" } },
+        where: { ...LANG, number, name: { contains: name, mode: "insensitive" } },
         take: 1,
         select: IDENTITY,
       });
@@ -244,7 +248,7 @@ export async function importCards(binderId: string, text: string) {
     }
     if (name) {
       const cs = await prisma.card.findMany({
-        where: { name: { contains: name, mode: "insensitive" } },
+        where: { ...LANG, name: { contains: name, mode: "insensitive" } },
         orderBy: { releasedAt: "desc" },
         take: 1,
         select: IDENTITY,

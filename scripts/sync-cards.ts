@@ -1,172 +1,167 @@
 /**
- * Sync Pokémon cards from pokemontcg.io into the local Card / PriceSnapshot tables.
+ * Sync cards from TCGdex (https://api.tcgdex.net) into Card / PriceSnapshot.
+ * TCGdex is a single source for localized names, localized images, and
+ * Cardmarket (EUR) + TCGplayer (USD) pricing.
  *
- *   pnpm sync:cards                 # curated default set list
- *   pnpm sync:cards sv3pt5 base1    # specific set ids
- *   pnpm sync:cards --all           # every set (slow: ~20k cards)
+ *   pnpm sync:cards                     # default language/set targets
+ *   pnpm sync:cards en:sv03.5 ja:SV2a   # explicit lang:setId targets
  *
- * An optional POKEMONTCG_API_KEY in .env raises the rate limit.
+ * Note: Japanese/Korean sets have their own ids (JP 151 = SV2a, not sv03.5).
  */
 import { prisma } from "../src/lib/prisma";
 
-const API = "https://api.pokemontcg.io/v2";
-const API_KEY = process.env.POKEMONTCG_API_KEY || "";
+const BASE = "https://api.tcgdex.net/v2";
 
-// Recognisable modern + vintage sets that make for good demo search results.
-const DEFAULT_SETS = ["sv3pt5", "sv1", "swsh1", "base1", "sm12"];
+// lang → set ids to pull. Western sets share ids across en/es/fr/…; JP sets differ.
+const DEFAULT_TARGETS: { lang: string; sets: string[] }[] = [
+  { lang: "en", sets: ["sv03.5", "base1"] },
+  { lang: "es", sets: ["sv03.5"] },
+  { lang: "ja", sets: ["SV2a"] },
+];
 
-type ApiCard = {
+type Brief = { id: string; localId?: string; name?: string };
+type Pricing = {
+  cardmarket?: { unit?: string; trend?: number | null; avg?: number | null; avg30?: number | null };
+  tcgplayer?: Record<string, { marketPrice?: number | null } | string | undefined>;
+};
+type FullCard = {
   id: string;
-  name: string;
-  number: string;
+  localId?: string;
+  name?: string;
+  category?: string;
   rarity?: string;
-  supertype?: string;
-  subtypes?: string[];
   types?: string[];
-  artist?: string;
-  images?: { small?: string; large?: string };
-  set?: { id: string; name: string; series?: string; releaseDate?: string };
-  cardmarket?: { url?: string; prices?: Record<string, number | null> };
-  tcgplayer?: {
-    url?: string;
-    prices?: Record<string, { market?: number | null } | undefined>;
-  };
+  stage?: string;
+  suffix?: string;
+  trainerType?: string;
+  illustrator?: string;
+  image?: string;
+  pricing?: Pricing;
 };
 
-// Heuristic: pokemontcg.io has no "full art" flag, so infer it from rarity/subtypes.
-const FULL_ART_RARITY =
-  /illustration|full art|special|ultra|rainbow|secret|hyper|gold|amazing|radiant|gallery|shiny|character/i;
-function computeFullArt(card: ApiCard): boolean {
-  if (card.rarity && FULL_ART_RARITY.test(card.rarity)) return true;
-  return (card.subtypes ?? []).some((s) => /vmax|vstar/i.test(s));
-}
-
-async function fetchJson(url: string) {
-  const res = await fetch(url, {
-    headers: API_KEY ? { "X-Api-Key": API_KEY } : {},
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
-  return res.json();
-}
-
-async function listAllSetIds(): Promise<string[]> {
-  const ids: string[] = [];
-  let page = 1;
-  for (;;) {
-    const { data, totalCount } = await fetchJson(
-      `${API}/sets?page=${page}&pageSize=250&orderBy=releaseDate`,
-    );
-    ids.push(...data.map((s: { id: string }) => s.id));
-    if (ids.length >= totalCount || data.length === 0) break;
-    page++;
+async function j<T>(url: string): Promise<T | null> {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return (await r.json()) as T;
+  } catch {
+    return null;
   }
-  return ids;
 }
 
-function cardmarketEur(card: ApiCard): number | null {
-  const p = card.cardmarket?.prices;
-  if (!p) return null;
-  return p.trendPrice ?? p.averageSellPrice ?? p.avg7 ?? null;
+function toSupertype(category?: string): string | null {
+  if (!category) return null;
+  if (/pok[eé]mon/i.test(category)) return "Pokémon";
+  if (/trainer/i.test(category)) return "Trainer";
+  if (/energy/i.test(category)) return "Energy";
+  return category;
 }
 
-function tcgplayerUsd(card: ApiCard): number | null {
-  const p = card.tcgplayer?.prices;
-  if (!p) return null;
-  for (const variant of ["holofoil", "normal", "reverseHolofoil", "1stEditionHolofoil"]) {
-    const m = p[variant]?.market;
-    if (typeof m === "number") return m;
+function toSubtypes(c: FullCard): string[] {
+  const out: string[] = [];
+  if (c.stage) out.push(c.stage.replace(/^Stage(\d)$/, "Stage $1"));
+  if (c.suffix) out.push(c.suffix);
+  if (c.trainerType) out.push(c.trainerType === "Tool" ? "Pokémon Tool" : c.trainerType);
+  return out;
+}
+
+const FULL_ART =
+  /illustration|full art|ultra|rainbow|secret|hyper|gold|amazing|radiant|gallery|shiny|special|character/i;
+function isFullArt(c: FullCard): boolean {
+  if (c.rarity && FULL_ART.test(c.rarity)) return true;
+  return Boolean(c.suffix && /vmax|vstar/i.test(c.suffix));
+}
+
+function cardmarketEur(p?: Pricing): number | null {
+  const cm = p?.cardmarket;
+  if (!cm) return null;
+  return cm.trend ?? cm.avg ?? cm.avg30 ?? null;
+}
+
+function tcgplayerUsd(p?: Pricing): number | null {
+  const tp = p?.tcgplayer;
+  if (!tp) return null;
+  for (const [k, v] of Object.entries(tp)) {
+    if (k === "unit" || k === "updated" || typeof v !== "object" || !v) continue;
+    if (typeof v.marketPrice === "number") return v.marketPrice;
   }
   return null;
 }
 
-async function syncSet(setId: string) {
-  let page = 1;
-  let cardsInSet = 0;
-  for (;;) {
-    const { data } = (await fetchJson(
-      `${API}/cards?q=set.id:${setId}&page=${page}&pageSize=250&orderBy=number`,
-    )) as { data: ApiCard[] };
-    if (!data || data.length === 0) break;
-
-    for (const c of data) {
-      const releasedAt = c.set?.releaseDate ? new Date(c.set.releaseDate) : null;
-      await prisma.card.upsert({
-        where: { id: c.id },
-        create: {
-          id: c.id,
-          name: c.name,
-          number: c.number,
-          setId: c.set?.id ?? setId,
-          setName: c.set?.name ?? "",
-          setSeries: c.set?.series ?? null,
-          rarity: c.rarity ?? null,
-          supertype: c.supertype ?? null,
-          subtypes: c.subtypes ?? [],
-          types: c.types ?? [],
-          artist: c.artist ?? null,
-          isFullArt: computeFullArt(c),
-          imageSmall: c.images?.small ?? null,
-          imageLarge: c.images?.large ?? null,
-          cardmarketUrl: c.cardmarket?.url ?? null,
-          tcgplayerUrl: c.tcgplayer?.url ?? null,
-          releasedAt,
-        },
-        update: {
-          name: c.name,
-          rarity: c.rarity ?? null,
-          supertype: c.supertype ?? null,
-          subtypes: c.subtypes ?? [],
-          types: c.types ?? [],
-          artist: c.artist ?? null,
-          isFullArt: computeFullArt(c),
-          imageSmall: c.images?.small ?? null,
-          imageLarge: c.images?.large ?? null,
-          cardmarketUrl: c.cardmarket?.url ?? null,
-          tcgplayerUrl: c.tcgplayer?.url ?? null,
-        },
-      });
-
-      const eur = cardmarketEur(c);
-      if (eur != null) {
-        await prisma.priceSnapshot.create({
-          data: { cardId: c.id, source: "cardmarket", price: eur, currency: "EUR" },
-        });
-      }
-      const usd = tcgplayerUsd(c);
-      if (usd != null) {
-        await prisma.priceSnapshot.create({
-          data: { cardId: c.id, source: "tcgplayer", price: usd, currency: "USD" },
-        });
-      }
-    }
-
-    cardsInSet += data.length;
-    if (data.length < 250) break;
-    page++;
+async function chunk<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
   }
-  return cardsInSet;
+}
+
+async function syncSet(lang: string, setId: string): Promise<number> {
+  const set = await j<{ name?: string; serie?: { name?: string }; releaseDate?: string; cards?: Brief[] }>(
+    `${BASE}/${lang}/sets/${setId}`,
+  );
+  if (!set?.cards?.length) return 0;
+  const setName = set.name ?? setId;
+  const setSeries = set.serie?.name ?? null;
+  const releasedAt = set.releaseDate ? new Date(set.releaseDate) : null;
+
+  let count = 0;
+  await chunk(set.cards, 8, async (brief) => {
+    const c = await j<FullCard>(`${BASE}/${lang}/cards/${brief.id}`);
+    if (!c) return;
+    const id = `${lang}:${c.id}`;
+    const data = {
+      tcgdexId: c.id,
+      language: lang,
+      name: c.name ?? brief.name ?? c.id,
+      number: c.localId ?? brief.localId ?? "",
+      setId,
+      setName,
+      setSeries,
+      rarity: c.rarity ?? null,
+      supertype: toSupertype(c.category),
+      subtypes: toSubtypes(c),
+      types: c.types ?? [],
+      artist: c.illustrator ?? null,
+      isFullArt: isFullArt(c),
+      imageBase: c.image ?? null,
+      releasedAt,
+    };
+    await prisma.card.upsert({ where: { id }, create: { id, ...data }, update: data });
+
+    const eur = cardmarketEur(c.pricing);
+    if (eur != null) {
+      await prisma.priceSnapshot.create({
+        data: { cardId: id, source: "cardmarket", price: eur, currency: "EUR" },
+      });
+    }
+    const usd = tcgplayerUsd(c.pricing);
+    if (usd != null) {
+      await prisma.priceSnapshot.create({
+        data: { cardId: id, source: "tcgplayer", price: usd, currency: "USD" },
+      });
+    }
+    count++;
+  });
+  return count;
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  const sets = args.includes("--all")
-    ? await listAllSetIds()
-    : args.length > 0
-      ? args
-      : DEFAULT_SETS;
+  const targets = args.length
+    ? args.map((a) => {
+        const [lang, setId] = a.split(":");
+        return { lang, sets: [setId] };
+      })
+    : DEFAULT_TARGETS;
 
-  console.log(`Syncing ${sets.length} set(s)${API_KEY ? "" : " (no API key — lower rate limit)"}`);
   let total = 0;
-  for (const setId of sets) {
-    try {
-      const n = await syncSet(setId);
+  for (const { lang, sets } of targets) {
+    for (const setId of sets) {
+      const n = await syncSet(lang, setId);
       total += n;
-      console.log(`  ✓ ${setId}: ${n} cards`);
-    } catch (err) {
-      console.error(`  ✗ ${setId}: ${(err as Error).message}`);
+      console.log(`  ${n ? "✓" : "✗"} ${lang}:${setId} — ${n} cards`);
     }
   }
-  console.log(`Done. ${total} cards synced across ${sets.length} set(s).`);
+  console.log(`Done. ${total} card rows synced.`);
 }
 
 main()

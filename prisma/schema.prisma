@@ -110,33 +110,33 @@ model Verification {
   @@map("verification")
 }
 
-// ---------- Card data (synced from pokemontcg.io) ----------
+// ---------- Card data (synced from TCGdex — multi-language + pricing) ----------
 model Card {
-  id            String    @id // pokemontcg.io id, e.g. "sv3pt5-199"
-  name          String
-  number        String // collector number within set
-  setId         String
-  setName       String
-  setSeries     String?
-  rarity        String?
-  supertype     String? // Pokémon / Trainer / Energy
-  subtypes      String[] // e.g. Basic, Stage 2, ex, V, Supporter, Item, Stadium, Pokémon Tool
-  types         String[] // energy types: Fire, Water, …
-  artist        String?
-  isFullArt     Boolean   @default(false) // heuristic from rarity/subtypes (illustration/alt/secret art)
-  imageSmall    String?
-  imageLarge    String?
-  cardmarketUrl String?
-  tcgplayerUrl  String?
-  releasedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id         String    @id // "${language}:${tcgdexId}", e.g. "en:sv03.5-006"
+  tcgdexId   String // raw TCGdex id, e.g. "sv03.5-006"
+  language   String    @default("en") // en | es | fr | de | it | pt | ja | ko …
+  name       String // localized
+  number     String // collector number within set (TCGdex localId)
+  setId      String
+  setName    String
+  setSeries  String?
+  rarity     String?
+  supertype  String? // Pokémon / Trainer / Energy
+  subtypes   String[] // Basic, Stage 2, ex, V, Supporter, Item, Stadium, Pokémon Tool …
+  types      String[] // energy types: Fire, Water, …
+  artist     String?
+  isFullArt  Boolean   @default(false) // heuristic (illustration/alt/secret art)
+  imageBase  String? // TCGdex asset base; append `/high.png`, `/low.png`
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   prices PriceSnapshot[]
   slots  BinderSlot[]
 
+  @@unique([tcgdexId, language])
   @@index([name])
-  @@index([setId])
+  @@index([language])
   @@index([supertype])
   @@index([artist])
   @@map("card")

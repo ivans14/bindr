@@ -4,16 +4,13 @@ import { cn } from "@/lib/utils";
 export type CardIdentity = {
   name: string;
   number: string;
-  setId: string;
   setName: string;
+  imageBase: string | null; // TCGdex asset base; null when the card has no image
 };
 
-const CDN = "https://images.pokemontcg.io";
-
-/** pokemontcg.io images are derivable from a card's set id + collector number. */
-export function cardImageUrl(setId: string, number: string, size: "small" | "large" = "small") {
-  const suffix = size === "large" ? "_hires" : "";
-  return `${CDN}/${setId}/${encodeURIComponent(number)}${suffix}.png`;
+/** TCGdex images resolve as `{base}/{quality}.png`. */
+export function cardImageUrl(imageBase: string, quality: "high" | "low" = "high") {
+  return `${imageBase}/${quality}.png`;
 }
 
 const variants = {
@@ -30,18 +27,16 @@ const variants = {
 export function CardImage({
   card,
   variant = "fill",
-  size = "small",
   className,
 }: {
   card: CardIdentity;
   variant?: keyof typeof variants;
-  size?: "small" | "large";
   className?: string;
 }) {
   const box = cn(variants[variant], className);
   const label = `${card.name} · ${card.setName} #${card.number}`;
 
-  if (!card.setId || !card.number) {
+  if (!card.imageBase) {
     return (
       <div
         className={cn(
@@ -57,7 +52,7 @@ export function CardImage({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={cardImageUrl(card.setId, card.number, size)}
+      src={cardImageUrl(card.imageBase, variant === "thumb" ? "low" : "high")}
       alt={label}
       title={label}
       draggable={false}
