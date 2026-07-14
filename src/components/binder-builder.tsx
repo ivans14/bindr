@@ -22,6 +22,7 @@ import {
   X,
   Layers,
   ImagePlus,
+  Sparkles,
 } from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
@@ -35,6 +36,7 @@ import {
   setSleeve,
   setCustomImage,
   updateBinderMeta,
+  similarCards,
 } from "@/app/actions/binders";
 import { type CardFilters as Filters, hasActiveFilters, DEFAULT_LANGUAGE } from "@/lib/card-query";
 import { THEMES, themeBackground, SLEEVES, sleeveBackground } from "@/lib/binder-style";
@@ -165,6 +167,12 @@ export function BinderBuilder({
 
   function nextEmpty(): number | null {
     return target ?? slots.find((s) => !s.card && !s.sleeve && !s.customImage)?.position ?? null;
+  }
+
+  function matchVibe() {
+    startSearch(async () => {
+      setResults(await similarCards(binderId));
+    });
   }
 
   function moveCard(from: number, to: number) {
@@ -397,6 +405,16 @@ export function BinderBuilder({
             <div className="mt-3">
               <CardFilters value={filters} sets={sets} onChange={setFilters} />
             </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full gap-2"
+              onClick={matchVibe}
+              title="Suggest cards that match your binder's types, rarity, artists & era"
+            >
+              <Sparkles className="size-4 text-accent" /> Match this binder&apos;s vibe
+            </Button>
 
             <p className="mt-2 text-[11px] text-muted-foreground">
               {target != null

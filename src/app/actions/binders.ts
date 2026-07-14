@@ -205,6 +205,96 @@ export async function searchCards(filters: CardFilters) {
   return cards.map((c) => ({ ...c, priceEur: priceMap.get(c.id) ?? null }));
 }
 
+/**
+ * "Match this binder's vibe" — heuristic suggestions (no AI). Profiles the cards
+ * already in the binder (types/color-family, rarity, full-art ratio, artists, era)
+ * and scores candidate cards by overlap. Excludes cards already placed.
+ */
+export async function similarCards(binderId: string) {
+  await ownedBinder(binderId);
+  const slots = await prisma.binderSlot.findMany({
+    where: { binderId, cardId: { not: null } },
+    select: {
+      cardId: true,
+      card: {
+        select: { types: true, rarity: true, isFullArt: true, artist: true, setId: true, language: true },
+      },
+    },
+  });
+  const cards = slots.map((s) => s.card).filter((c): c is NonNullable<typeof c> => Boolean(c));
+  if (cards.length === 0) return [];
+
+  const placedIds = slots.map((s) => s.cardId!).filter(Boolean);
+  const types = new Set<string>();
+  const rarities = new Set<string>();
+  const artists = new Set<string>();
+  const setIds = new Set<string>();
+  let fullArt = 0;
+  for (const c of cards) {
+    c.types.forEach((t) => types.add(t));
+    if (c.rarity) rarities.add(c.rarity);
+    if (c.artist) artists.add(c.artist);
+    setIds.add(c.setId);
+    if (c.isFullArt) fullArt++;
+  }
+  const language = cards[0].language;
+  const fullArtMajority = fullArt >= cards.length / 2;
+
+  const or: Prisma.CardWhereInput[] = [];
+  if (types.size) or.push({ types: { hasSome: [...types] } });
+  if (setIds.size) or.push({ setId: { in: [...setIds] } });
+  if (artists.size) or.push({ artist: { in: [...artists] } });
+  if (fullArtMajority) or.push({ isFullArt: true });
+
+  const pool = await prisma.card.findMany({
+    where: { language, id: { notIn: placedIds }, OR: or },
+    take: 300,
+    select: {
+      id: true,
+      name: true,
+      number: true,
+      setName: true,
+      imageBase: true,
+      types: true,
+      rarity: true,
+      isFullArt: true,
+      artist: true,
+      setId: true,
+    },
+  });
+
+  const scored = pool
+    .map((c) => {
+      let score = c.types.filter((t) => types.has(t)).length * 2; // shared type/color family
+      if (c.rarity && rarities.has(c.rarity)) score += 1;
+      if (c.artist && artists.has(c.artist)) score += 2;
+      if (setIds.has(c.setId)) score += 1;
+      if (c.isFullArt === fullArtMajority) score += 1;
+      return { c, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 24)
+    .map((x) => x.c);
+
+  const prices = await prisma.priceSnapshot.findMany({
+    where: { cardId: { in: scored.map((c) => c.id) }, source: "cardmarket", currency: "EUR" },
+    orderBy: { fetchedAt: "desc" },
+    select: { cardId: true, price: true },
+  });
+  const priceMap = new Map<string, number>();
+  for (const p of prices) if (!priceMap.has(p.cardId)) priceMap.set(p.cardId, Number(p.price));
+
+  return scored.map((c) => ({
+    id: c.id,
+    name: c.name,
+    number: c.number,
+    setName: c.setName,
+    imageBase: c.imageBase,
+    priceEur: priceMap.get(c.id) ?? null,
+  }));
+}
+
 /** Filter facets that are data-dependent (sets, per language). */
 export async function getCardFacets() {
   const sets = await prisma.card.groupBy({
