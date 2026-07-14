@@ -1,0 +1,214 @@
+// bindr — Pokémon binder builder + physical fulfillment
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Tier {
+  FREE
+  PAID
+}
+
+enum Visibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+enum SlotStatus {
+  EMPTY
+  OWNED // collector already has this card
+  WANTED // to be sourced during fulfillment
+}
+
+enum FulfillmentState {
+  REQUESTED
+  QUOTED
+  PAID
+  SOURCING
+  PARTIALLY_SOURCED // some wanted cards could not be found
+  SOURCED
+  ASSEMBLING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+// ---------- Better Auth ----------
+model User {
+  id               String   @id
+  name             String
+  email            String   @unique
+  emailVerified    Boolean  @default(false)
+  image            String?
+  role             Role     @default(USER)
+  tier             Tier     @default(FREE)
+  stripeCustomerId String?  @unique
+  preferredLocale  String   @default("en")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sessions          Session[]
+  accounts          Account[]
+  binders           Binder[]
+  fulfillmentOrders FulfillmentOrder[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ---------- Card data (synced from pokemontcg.io) ----------
+model Card {
+  id            String    @id // pokemontcg.io id, e.g. "sv3pt5-199"
+  name          String
+  number        String // collector number within set
+  setId         String
+  setName       String
+  setSeries     String?
+  rarity        String?
+  supertype     String? // Pokémon / Trainer / Energy
+  subtypes      String[]
+  types         String[]
+  imageSmall    String?
+  imageLarge    String?
+  cardmarketUrl String?
+  tcgplayerUrl  String?
+  releasedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  prices PriceSnapshot[]
+  slots  BinderSlot[]
+
+  @@index([name])
+  @@index([setId])
+  @@map("card")
+}
+
+model PriceSnapshot {
+  id        String   @id @default(cuid())
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  source    String // "cardmarket" | "tcgplayer"
+  variant   String   @default("normal") // normal | holofoil | reverseHolofoil
+  price     Decimal  @db.Decimal(10, 2)
+  currency  String // "EUR" | "USD"
+  fetchedAt DateTime @default(now())
+
+  @@index([cardId, source, fetchedAt])
+  @@map("price_snapshot")
+}
+
+// ---------- Binders ----------
+model Binder {
+  id          String     @id @default(cuid())
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title       String     @default("Untitled binder")
+  description String?
+  theme       String     @default("midnight") // backdrop/theme key
+  visibility  Visibility @default(PRIVATE)
+  pageCount   Int        @default(1)
+  columns     Int        @default(3) // 3x3 = 9-pocket page
+  rows        Int        @default(3)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  slots             BinderSlot[]
+  fulfillmentOrders FulfillmentOrder[]
+
+  @@index([ownerId])
+  @@map("binder")
+}
+
+model BinderSlot {
+  id        String     @id @default(cuid())
+  binderId  String
+  binder    Binder     @relation(fields: [binderId], references: [id], onDelete: Cascade)
+  position  Int // flat index across all pages
+  cardId    String?
+  card      Card?      @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  status    SlotStatus @default(EMPTY)
+  note      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([binderId, position])
+  @@index([binderId])
+  @@map("binder_slot")
+}
+
+// ---------- Fulfillment ----------
+model FulfillmentOrder {
+  id                    String           @id @default(cuid())
+  binderId              String
+  binder                Binder           @relation(fields: [binderId], references: [id])
+  userId                String
+  user                  User             @relation(fields: [userId], references: [id])
+  state                 FulfillmentState @default(REQUESTED)
+  quotedTotal           Decimal?         @db.Decimal(10, 2) // cards + fee + shipping
+  currency              String           @default("EUR")
+  serviceFee            Decimal?         @db.Decimal(10, 2)
+  shippingFee           Decimal?         @db.Decimal(10, 2)
+  stripePaymentIntentId String?
+  notes                 String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([state])
+  @@map("fulfillment_order")
+}

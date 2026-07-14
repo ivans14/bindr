@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: bindr-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bindr
+      POSTGRES_PASSWORD: bindr
+      POSTGRES_DB: bindr
+    ports:
+      - "5433:5432"
+    volumes:
+      - bindr-pgdata:/var/lib/postgresql/data
+
+volumes:
+  bindr-pgdata:
