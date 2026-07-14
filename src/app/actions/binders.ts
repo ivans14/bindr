@@ -66,7 +66,29 @@ export async function placeCard(input: z.infer<typeof placeSchema>) {
   await prisma.binderSlot.upsert({
     where: { binderId_position: { binderId, position } },
     create: { binderId, position, cardId, status: "WANTED" },
-    update: { cardId, status: "WANTED" },
+    update: { cardId, status: "WANTED", sleeve: null, customImage: null },
+  });
+  revalidatePath(`/binders/${binderId}`);
+}
+
+/** Place a decorative sleeve insert into a pocket (clears any card/custom image). */
+export async function setSleeve(binderId: string, position: number, sleeve: string) {
+  await ownedBinder(binderId);
+  await prisma.binderSlot.upsert({
+    where: { binderId_position: { binderId, position } },
+    create: { binderId, position, sleeve, status: "EMPTY" },
+    update: { sleeve, cardId: null, customImage: null, status: "EMPTY", note: null },
+  });
+  revalidatePath(`/binders/${binderId}`);
+}
+
+/** Place a user-uploaded custom image into a pocket (clears any card/sleeve). */
+export async function setCustomImage(binderId: string, position: number, url: string) {
+  await ownedBinder(binderId);
+  await prisma.binderSlot.upsert({
+    where: { binderId_position: { binderId, position } },
+    create: { binderId, position, customImage: url, status: "EMPTY" },
+    update: { customImage: url, cardId: null, sleeve: null, status: "EMPTY", note: null },
   });
   revalidatePath(`/binders/${binderId}`);
 }
@@ -75,7 +97,7 @@ export async function clearSlot(binderId: string, position: number) {
   await ownedBinder(binderId);
   await prisma.binderSlot.update({
     where: { binderId_position: { binderId, position } },
-    data: { cardId: null, status: "EMPTY", note: null },
+    data: { cardId: null, status: "EMPTY", note: null, sleeve: null, customImage: null },
   });
   revalidatePath(`/binders/${binderId}`);
 }
@@ -95,11 +117,23 @@ export async function moveSlot(binderId: string, from: number, to: number) {
   await prisma.$transaction([
     prisma.binderSlot.update({
       where: { binderId_position: { binderId, position: from } },
-      data: { cardId: b?.cardId ?? null, status: b?.status ?? "EMPTY", note: b?.note ?? null },
+      data: {
+        cardId: b?.cardId ?? null,
+        status: b?.status ?? "EMPTY",
+        note: b?.note ?? null,
+        sleeve: b?.sleeve ?? null,
+        customImage: b?.customImage ?? null,
+      },
     }),
     prisma.binderSlot.update({
       where: { binderId_position: { binderId, position: to } },
-      data: { cardId: a?.cardId ?? null, status: a?.status ?? "EMPTY", note: a?.note ?? null },
+      data: {
+        cardId: a?.cardId ?? null,
+        status: a?.status ?? "EMPTY",
+        note: a?.note ?? null,
+        sleeve: a?.sleeve ?? null,
+        customImage: a?.customImage ?? null,
+      },
     }),
   ]);
   revalidatePath(`/binders/${binderId}`);

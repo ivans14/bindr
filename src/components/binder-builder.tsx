@@ -12,7 +12,17 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Search, ShoppingBag, Plus, Loader2, GripVertical, Upload } from "lucide-react";
+import {
+  Search,
+  ShoppingBag,
+  Plus,
+  Loader2,
+  GripVertical,
+  Upload,
+  X,
+  Layers,
+  ImagePlus,
+} from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
   searchCards,
@@ -22,13 +32,19 @@ import {
   moveSlot,
   addPage,
   importCards,
+  setSleeve,
+  setCustomImage,
+  updateBinderMeta,
 } from "@/app/actions/binders";
 import { type CardFilters as Filters, hasActiveFilters, DEFAULT_LANGUAGE } from "@/lib/card-query";
+import { THEMES, themeBackground, SLEEVES, sleeveBackground } from "@/lib/binder-style";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CardImage, type CardIdentity } from "@/components/card-image";
 import { BinderCard } from "@/components/binder-card";
 import { CardFilters } from "@/components/card-filters";
+import { BrandMark } from "@/components/brand-mark";
 
 const SLOTS_PER_PAGE = 9;
 
@@ -42,6 +58,8 @@ type Slot = {
   position: number;
   status: "EMPTY" | "OWNED" | "WANTED";
   card: CardLite | null;
+  sleeve: string | null;
+  customImage: string | null;
   priceEur: number | null;
 };
 
@@ -50,14 +68,17 @@ export function BinderBuilder({
   pageCount,
   initialSlots,
   sets,
+  theme,
 }: {
   binderId: string;
   pageCount: number;
   initialSlots: Slot[];
   sets: { id: string; name: string; language: string }[];
+  theme: string;
 }) {
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [pages, setPages] = useState(pageCount);
+  const [themeKey, setThemeKey] = useState(theme);
   const [filters, setFilters] = useState<Filters>({ language: DEFAULT_LANGUAGE });
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, startSearch] = useTransition();
@@ -100,7 +121,7 @@ export function BinderBuilder({
     setSlots((prev) =>
       prev.map((s) =>
         s.position === position
-          ? { ...s, card, status: "WANTED", priceEur: card.priceEur }
+          ? { ...s, card, status: "WANTED", priceEur: card.priceEur, sleeve: null, customImage: null }
           : s,
       ),
     );
@@ -109,19 +130,59 @@ export function BinderBuilder({
     });
   }
 
+  function placeSleeve(position: number, sleeve: string) {
+    setSlots((prev) =>
+      prev.map((s) =>
+        s.position === position
+          ? { ...s, sleeve, card: null, status: "EMPTY", priceEur: null, customImage: null }
+          : s,
+      ),
+    );
+    startMutate(() => {
+      setSleeve(binderId, position, sleeve);
+    });
+  }
+
+  function placeCustomImage(position: number, url: string) {
+    setSlots((prev) =>
+      prev.map((s) =>
+        s.position === position
+          ? { ...s, customImage: url, card: null, status: "EMPTY", priceEur: null, sleeve: null }
+          : s,
+      ),
+    );
+    startMutate(() => {
+      setCustomImage(binderId, position, url);
+    });
+  }
+
+  function changeTheme(key: string) {
+    setThemeKey(key);
+    startMutate(() => {
+      updateBinderMeta({ binderId, theme: key });
+    });
+  }
+
+  function nextEmpty(): number | null {
+    return target ?? slots.find((s) => !s.card && !s.sleeve && !s.customImage)?.position ?? null;
+  }
+
   function moveCard(from: number, to: number) {
     if (from === to) return;
     setSlots((prev) => {
       const a = prev.find((s) => s.position === from);
       const b = prev.find((s) => s.position === to);
       if (!a) return prev;
+      const content = (x?: Slot) => ({
+        card: x?.card ?? null,
+        status: x?.status ?? ("EMPTY" as const),
+        priceEur: x?.priceEur ?? null,
+        sleeve: x?.sleeve ?? null,
+        customImage: x?.customImage ?? null,
+      });
       return prev.map((s) => {
-        if (s.position === from)
-          return b?.card
-            ? { ...s, card: b.card, status: b.status, priceEur: b.priceEur }
-            : { ...s, card: null, status: "EMPTY", priceEur: null };
-        if (s.position === to)
-          return { ...s, card: a.card, status: a.status, priceEur: a.priceEur };
+        if (s.position === from) return { ...s, ...content(b) };
+        if (s.position === to) return { ...s, ...content(a) };
         return s;
       });
     });
@@ -133,7 +194,9 @@ export function BinderBuilder({
   function remove(position: number) {
     setSlots((prev) =>
       prev.map((s) =>
-        s.position === position ? { ...s, card: null, status: "EMPTY", priceEur: null } : s,
+        s.position === position
+          ? { ...s, card: null, status: "EMPTY", priceEur: null, sleeve: null, customImage: null }
+          : s,
       ),
     );
     startMutate(() => {
@@ -197,6 +260,8 @@ export function BinderBuilder({
           position: pages * SLOTS_PER_PAGE + i,
           status: "EMPTY" as const,
           card: null,
+          sleeve: null,
+          customImage: null,
           priceEur: null,
         })),
       ]);
@@ -213,12 +278,22 @@ export function BinderBuilder({
           position: pl.position,
           status: pl.status,
           card: pl.card,
+          sleeve: null,
+          customImage: null,
           priceEur: pl.priceEur,
         });
       }
       // Fill any gaps created by new pages with empty slots.
       for (let p = 0; p < res.pageCount * SLOTS_PER_PAGE; p++) {
-        if (!map.has(p)) map.set(p, { position: p, status: "EMPTY", card: null, priceEur: null });
+        if (!map.has(p))
+          map.set(p, {
+            position: p,
+            status: "EMPTY",
+            card: null,
+            sleeve: null,
+            customImage: null,
+            priceEur: null,
+          });
       }
       return [...map.values()].sort((a, b) => a.position - b.position);
     });
@@ -235,13 +310,35 @@ export function BinderBuilder({
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* Binder pages — laid out left to right like a real binder */}
         <div className="min-w-0">
+          {/* Background picker */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Background
+            </span>
+            {THEMES.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => changeTheme(t.key)}
+                title={t.label}
+                style={{ background: t.background }}
+                className={cn(
+                  "size-6 rounded-md border transition-transform hover:scale-110",
+                  themeKey === t.key ? "border-primary ring-2 ring-primary/50" : "border-border",
+                )}
+              />
+            ))}
+          </div>
+
           <div className="flex gap-5 overflow-x-auto pb-3">
             {pageArray.map((pageSlots, p) => (
               <div key={p} className="w-[19rem] shrink-0 sm:w-[22rem]">
                 <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
                   Page {p + 1}
                 </div>
-                <div className="grid grid-cols-3 gap-3 rounded-2xl border border-border bg-card/40 p-3 sm:gap-3.5 sm:p-4">
+                <div
+                  className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-3 sm:gap-3.5 sm:p-4"
+                  style={{ background: themeBackground(themeKey) }}
+                >
                   {pageSlots.map((slot) => (
                     <SlotCell
                       key={slot.position}
@@ -322,6 +419,24 @@ export function BinderBuilder({
             </div>
           </div>
 
+          <SleevesPanel
+            onPick={(key) => {
+              const pos = nextEmpty();
+              if (pos == null) return;
+              placeSleeve(pos, key);
+              setTarget(null);
+            }}
+          />
+
+          <CustomImagePanel
+            onUploaded={(url) => {
+              const pos = nextEmpty();
+              if (pos == null) return;
+              placeCustomImage(pos, url);
+              setTarget(null);
+            }}
+          />
+
           <CsvImport onImport={importFromCsv} />
         </div>
       </div>
@@ -394,10 +509,12 @@ function SlotCell({
     data: { fromPosition: slot.position, card: slot.card },
   });
 
+  const empty = !slot.card && !slot.sleeve && !slot.customImage;
+
   return (
     <div
       ref={setNodeRef}
-      onClick={slot.card ? undefined : onSelect}
+      onClick={empty ? onSelect : undefined}
       className={
         "relative aspect-[63/88] overflow-hidden rounded-lg border transition-all " +
         (isOver
@@ -405,7 +522,7 @@ function SlotCell({
           : selected
             ? "border-accent ring-2 ring-accent"
             : "border-border") +
-        (slot.card ? "" : " pocket-empty cursor-pointer hover:border-primary/50")
+        (empty ? " pocket-empty cursor-pointer hover:border-primary/50" : "")
       }
     >
       {slot.card ? (
@@ -425,12 +542,40 @@ function SlotCell({
             onRemove={onRemove}
           />
         </div>
+      ) : slot.sleeve ? (
+        <div
+          className="group relative h-full w-full"
+          style={{ background: sleeveBackground(slot.sleeve) ?? undefined }}
+        >
+          <span className="absolute inset-0 grid place-items-center">
+            <BrandMark className="size-8 opacity-40" />
+          </span>
+          <SlotRemove onRemove={onRemove} />
+        </div>
+      ) : slot.customImage ? (
+        <div className="group relative h-full w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={slot.customImage} alt="" className="h-full w-full object-cover" />
+          <SlotRemove onRemove={onRemove} />
+        </div>
       ) : (
         <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground/60">
           {slot.position + 1}
         </span>
       )}
     </div>
+  );
+}
+
+function SlotRemove({ onRemove }: { onRemove: () => void }) {
+  return (
+    <button
+      onClick={onRemove}
+      className="absolute right-1 top-1 grid size-6 place-items-center rounded-md bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
+      title="Remove"
+    >
+      <X className="size-3.5" />
+    </button>
   );
 }
 
@@ -459,6 +604,103 @@ function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void 
       <div className="shrink-0 text-right text-xs font-semibold">
         {card.priceEur != null ? formatEur(card.priceEur) : "—"}
       </div>
+    </div>
+  );
+}
+
+function SleevesPanel({ onPick }: { onPick: (key: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Layers className="size-4" /> Sleeves
+      </button>
+      {open && (
+        <div className="mt-3">
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Click a sleeve to drop it into the selected (or next empty) pocket.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {SLEEVES.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => onPick(s.key)}
+                title={s.label}
+                style={{ background: s.background }}
+                className="relative aspect-[63/88] overflow-hidden rounded-md border border-border transition-transform hover:scale-[1.04] hover:border-primary/60"
+              >
+                <span className="absolute inset-0 grid place-items-center">
+                  <BrandMark className="size-5 opacity-40" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomImagePanel({ onUploaded }: { onUploaded: (url: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Upload failed.");
+        return;
+      }
+      onUploaded(data.url);
+    } catch {
+      setError("Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ImagePlus className="size-4" /> Custom image
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] text-muted-foreground">
+            Upload your own art (PNG/JPG/WebP, ≤ 4 MB) into the selected or next empty pocket —
+            handy for proxies or things you plan to print.
+          </p>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={onFile}
+            disabled={busy}
+            className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs file:text-secondary-foreground"
+          />
+          {busy && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Uploading…
+            </div>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

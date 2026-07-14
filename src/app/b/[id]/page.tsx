@@ -4,6 +4,8 @@ import { latestEurPrices } from "@/lib/pricing";
 import { formatEur } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { CardImage } from "@/components/card-image";
+import { BrandMark } from "@/components/brand-mark";
+import { themeBackground, sleeveBackground } from "@/lib/binder-style";
 
 const SLOTS_PER_PAGE = 9;
 
@@ -55,14 +57,27 @@ export default async function PublicBinderPage({
             <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
               Page {p + 1}
             </div>
-            <div className="grid grid-cols-3 gap-3 rounded-2xl border border-border bg-card/40 p-4">
+            <div
+              className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-4"
+              style={{ background: themeBackground(binder.theme) }}
+            >
               {pageSlots.map((s) => (
                 <div
                   key={s.position}
-                  className="aspect-[63/88] overflow-hidden rounded-lg border border-border"
+                  className="relative aspect-[63/88] overflow-hidden rounded-lg border border-border"
                 >
                   {s.card ? (
                     <CardImage card={s.card} variant="fill" />
+                  ) : s.sleeve ? (
+                    <div
+                      className="grid h-full w-full place-items-center"
+                      style={{ background: sleeveBackground(s.sleeve) ?? undefined }}
+                    >
+                      <BrandMark className="size-8 opacity-40" />
+                    </div>
+                  ) : s.customImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.customImage} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="pocket-empty h-full w-full" />
                   )}

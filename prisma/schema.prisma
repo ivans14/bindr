@@ -182,11 +182,13 @@ model BinderSlot {
   id        String     @id @default(cuid())
   binderId  String
   binder    Binder     @relation(fields: [binderId], references: [id], onDelete: Cascade)
-  position  Int // flat index across all pages
-  cardId    String?
-  card      Card?      @relation(fields: [cardId], references: [id], onDelete: SetNull)
-  status    SlotStatus @default(EMPTY)
-  note      String?
+  position    Int // flat index across all pages
+  cardId      String?
+  card        Card?      @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  status      SlotStatus @default(EMPTY)
+  sleeve      String? // decorative sleeve insert (preset key), mutually exclusive with a card
+  customImage String? // user-uploaded image URL (Vercel Blob), mutually exclusive with a card
+  note        String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 

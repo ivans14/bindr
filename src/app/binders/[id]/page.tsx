@@ -45,6 +45,8 @@ export default async function BuilderPage({
     position: s.position,
     status: s.status,
     card: s.card,
+    sleeve: s.sleeve,
+    customImage: s.customImage,
     priceEur: s.cardId ? (prices.get(s.cardId) ?? null) : null,
   }));
 
@@ -66,6 +68,7 @@ export default async function BuilderPage({
         pageCount={binder.pageCount}
         initialSlots={initialSlots}
         sets={facets.sets}
+        theme={binder.theme}
       />
     </div>
   );
