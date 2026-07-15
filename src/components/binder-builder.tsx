@@ -97,6 +97,10 @@ export function BinderBuilder({
   const [activeCard, setActiveCard] = useState<SearchResult | null>(null);
   const [activeWidth, setActiveWidth] = useState(170);
   const [target, setTarget] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"relevance" | "priceDesc" | "priceAsc" | "name" | "number">(
+    "relevance",
+  );
+  const [preview, setPreview] = useState<SearchResult | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -332,6 +336,26 @@ export function BinderBuilder({
     return res;
   }
 
+  const sortedResults = useMemo(() => {
+    const arr = [...results];
+    switch (sortBy) {
+      case "priceDesc":
+        return arr.sort((a, b) => (b.priceEur ?? -1) - (a.priceEur ?? -1));
+      case "priceAsc":
+        return arr.sort((a, b) => (a.priceEur ?? Infinity) - (b.priceEur ?? Infinity));
+      case "name":
+        return arr.sort((a, b) => a.name.localeCompare(b.name));
+      case "number":
+        return arr.sort(
+          (a, b) =>
+            (parseInt(a.number) || 0) - (parseInt(b.number) || 0) ||
+            a.number.localeCompare(b.number),
+        );
+      default:
+        return arr;
+    }
+  }, [results, sortBy]);
+
   const pageArray = Array.from({ length: pages }, (_, p) =>
     slots.filter((s) => Math.floor(s.position / SLOTS_PER_PAGE) === p),
   );
@@ -499,17 +523,30 @@ export function BinderBuilder({
               <Sparkles className="size-4 text-accent" /> Match this binder&apos;s vibe
             </Button>
 
-            <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>
+            <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span className="truncate">
                 {target != null
                   ? `Placing into pocket ${target + 1}`
                   : "Drag onto a pocket, or click one first"}
               </span>
               {results.length > 0 && (
-                <span>
-                  {results.length}
-                  {results.length >= 60 ? "+" : ""} result{results.length === 1 ? "" : "s"}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="rounded border border-input bg-background/60 px-1 py-0.5 text-[11px]"
+                  >
+                    <option value="relevance">Relevance</option>
+                    <option value="priceDesc">Price ↓</option>
+                    <option value="priceAsc">Price ↑</option>
+                    <option value="name">Name</option>
+                    <option value="number">No.</option>
+                  </select>
+                  <span>
+                    {results.length}
+                    {results.length >= 60 ? "+" : ""}
+                  </span>
+                </div>
               )}
             </div>
 
@@ -522,8 +559,13 @@ export function BinderBuilder({
               {!searching && hasActiveFilters(filters) && results.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">No cards found.</p>
               )}
-              {results.map((card) => (
-                <ResultRow key={card.id} card={card} onClick={() => clickPlace(card)} />
+              {sortedResults.map((card) => (
+                <ResultRow
+                  key={card.id}
+                  card={card}
+                  onClick={() => clickPlace(card)}
+                  onPreview={setPreview}
+                />
               ))}
             </div>
           </div>
@@ -564,6 +606,20 @@ export function BinderBuilder({
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* Hover-to-zoom preview (desktop) */}
+      {preview && !activeCard && (
+        <div className="pointer-events-none fixed left-6 top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border border-border bg-popover p-3 shadow-2xl xl:block">
+          <CardImage card={preview} variant="plain" className="w-full ring-1 ring-white/10" />
+          <div className="mt-2 truncate text-sm font-medium">{preview.name}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {preview.setName} · #{preview.number}
+          </div>
+          <div className="mt-1 text-sm font-semibold">
+            {preview.priceEur != null ? formatEur(preview.priceEur) : "—"}
+          </div>
+        </div>
+      )}
     </DndContext>
   );
 }
@@ -691,7 +747,15 @@ function SlotRemove({ onRemove }: { onRemove: () => void }) {
   );
 }
 
-function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void }) {
+function ResultRow({
+  card,
+  onClick,
+  onPreview,
+}: {
+  card: SearchResult;
+  onClick: () => void;
+  onPreview: (c: SearchResult | null) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `card-${card.id}`,
     data: { card },
@@ -701,6 +765,8 @@ function ResultRow({ card, onClick }: { card: SearchResult; onClick: () => void 
     <div
       ref={setNodeRef}
       style={{ opacity: isDragging ? 0.4 : 1 }}
+      onMouseEnter={() => onPreview(card)}
+      onMouseLeave={() => onPreview(null)}
       className="flex items-center gap-2.5 rounded-lg border border-transparent p-1.5 hover:border-border hover:bg-muted/50"
     >
       <button {...listeners} {...attributes} className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing">

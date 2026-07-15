@@ -13,6 +13,7 @@ import {
   hasActiveFilters,
 } from "@/lib/card-query";
 import { cn } from "@/lib/utils";
+import { TypeIcon } from "@/components/type-icon";
 
 function toggle<T>(arr: T[] | undefined, v: T): T[] {
   const set = new Set(arr ?? []);
@@ -39,7 +40,7 @@ export function CardFilters({
   const langSets = sets.filter((s) => s.language === lang);
 
   return (
-    <div className="rounded-lg border border-border bg-background/40">
+    <div className="relative rounded-lg border border-border bg-background/40">
       {/* Language — primary context, always visible */}
       <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
         <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">Lang</span>
@@ -80,7 +81,9 @@ export function CardFilters({
       </div>
 
       {open && (
-        <div className="space-y-3 border-t border-border px-3 py-3">
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-[70vh] space-y-3 overflow-y-auto rounded-xl border border-border bg-popover p-3 shadow-2xl">
           <Group label="Category">
             {SUPERTYPES.map((s) => (
               <button
@@ -105,19 +108,14 @@ export function CardFilters({
                 <button
                   key={t}
                   onClick={() => set({ types: toggle(value.types, t) })}
+                  title={t}
                   className={cn(
-                    chip,
-                    on
-                      ? "border-transparent text-white"
-                      : "border-border text-muted-foreground hover:text-foreground",
+                    "grid size-8 place-items-center rounded-full border transition-all hover:scale-110",
+                    on ? "" : "border-border opacity-70 hover:opacity-100",
                   )}
-                  style={on ? { background: TYPE_COLOR[t] } : undefined}
+                  style={on ? { background: `${TYPE_COLOR[t]}22`, borderColor: TYPE_COLOR[t] } : undefined}
                 >
-                  <span
-                    className="mr-1 inline-block size-2 rounded-full align-middle"
-                    style={{ background: TYPE_COLOR[t] }}
-                  />
-                  {t}
+                  <TypeIcon type={t} className="size-4" />
                 </button>
               );
             })}
@@ -170,7 +168,8 @@ export function CardFilters({
               className="h-9 w-full rounded-lg border border-input bg-background/60 px-3 text-sm placeholder:text-muted-foreground"
             />
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -186,7 +185,7 @@ export function ActiveFilters({
   sets: { id: string; name: string }[];
   onChange: (next: CardFilters) => void;
 }) {
-  const chips: { key: string; label: string; dot?: string; onRemove: () => void }[] = [];
+  const chips: { key: string; label: string; type?: string; onRemove: () => void }[] = [];
   if (value.supertype)
     chips.push({
       key: "sup",
@@ -197,7 +196,7 @@ export function ActiveFilters({
     chips.push({
       key: `t-${t}`,
       label: t,
-      dot: TYPE_COLOR[t],
+      type: t,
       onRemove: () => onChange({ ...value, types: value.types!.filter((x) => x !== t) }),
     }),
   );
@@ -229,7 +228,7 @@ export function ActiveFilters({
           className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
           title="Remove filter"
         >
-          {c.dot && <span className="size-1.5 rounded-full" style={{ background: c.dot }} />}
+          {c.type && <TypeIcon type={c.type} className="size-3" />}
           {c.label}
           <X className="size-3" />
         </button>
