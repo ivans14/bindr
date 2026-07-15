@@ -27,10 +27,12 @@ const chip =
 export function CardFilters({
   value,
   sets,
+  artists,
   onChange,
 }: {
   value: CardFilters;
   sets: { id: string; name: string; language: string }[];
+  artists: string[];
   onChange: (next: CardFilters) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -156,16 +158,19 @@ export function CardFilters({
           </div>
 
           <div className="grid gap-2">
-            <SetCombobox
-              sets={langSets}
+            <Combobox
+              items={langSets.map((s) => ({ value: s.id, label: s.name }))}
               value={value.setId}
               onChange={(id) => set({ setId: id })}
+              placeholder="All sets"
+              clearLabel="All sets"
             />
-            <input
-              value={value.artist ?? ""}
-              onChange={(e) => set({ artist: e.target.value || undefined })}
-              placeholder="Artist…"
-              className="h-9 w-full rounded-lg border border-input bg-background/60 px-3 text-sm placeholder:text-muted-foreground"
+            <Combobox
+              items={artists.map((a) => ({ value: a, label: a }))}
+              value={value.artist}
+              onChange={(a) => set({ artist: a })}
+              placeholder="Any artist"
+              clearLabel="Any artist"
             />
           </div>
           </div>
@@ -237,24 +242,30 @@ export function ActiveFilters({
   );
 }
 
-function SetCombobox({
-  sets,
+function Combobox({
+  items,
   value,
   onChange,
+  placeholder,
+  clearLabel,
 }: {
-  sets: { id: string; name: string }[];
+  items: { value: string; label: string }[];
   value?: string;
-  onChange: (id: string | undefined) => void;
+  onChange: (value: string | undefined) => void;
+  placeholder: string;
+  clearLabel: string;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const selected = sets.find((s) => s.id === value);
-  const filtered = (q ? sets.filter((s) => s.name.toLowerCase().includes(q.toLowerCase())) : sets).slice(0, 60);
+  const selected = items.find((i) => i.value === value);
+  const filtered = (
+    q ? items.filter((i) => i.label.toLowerCase().includes(q.toLowerCase())) : items
+  ).slice(0, 60);
 
   return (
     <div className="relative">
       <input
-        value={open ? q : (selected?.name ?? "")}
+        value={open ? q : (selected?.label ?? "")}
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
@@ -264,7 +275,7 @@ function SetCombobox({
           setQ("");
         }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="All sets"
+        placeholder={placeholder}
         className="h-9 w-full rounded-lg border border-input bg-background/60 px-3 text-sm placeholder:text-muted-foreground"
       />
       {open && (
@@ -276,25 +287,25 @@ function SetCombobox({
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
           >
-            All sets
+            {clearLabel}
           </button>
-          {filtered.map((s) => (
+          {filtered.map((i) => (
             <button
-              key={s.id}
+              key={i.value}
               onMouseDown={() => {
-                onChange(s.id);
+                onChange(i.value);
                 setOpen(false);
               }}
               className={cn(
                 "block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted",
-                s.id === value && "text-primary",
+                i.value === value && "text-primary",
               )}
             >
-              {s.name}
+              {i.label}
             </button>
           ))}
           {filtered.length === 0 && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No sets match.</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">No matches.</div>
           )}
         </div>
       )}

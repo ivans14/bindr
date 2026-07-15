@@ -199,7 +199,7 @@ export async function searchCards(filters: CardFilters) {
     where,
     orderBy: [{ name: "asc" }, { releasedAt: "desc" }],
     take: 60,
-    select: { id: true, name: true, number: true, setName: true, imageBase: true },
+    select: { id: true, name: true, number: true, setName: true, imageBase: true, types: true },
   });
 
   const prices = await prisma.priceSnapshot.findMany({
@@ -299,17 +299,21 @@ export async function similarCards(binderId: string) {
     number: c.number,
     setName: c.setName,
     imageBase: c.imageBase,
+    types: c.types,
     priceEur: priceMap.get(c.id) ?? null,
   }));
 }
 
-/** Filter facets that are data-dependent (sets, per language). */
+/** Filter facets that are data-dependent (sets per language, artists). */
 export async function getCardFacets() {
-  const sets = await prisma.card.groupBy({
-    by: ["setId", "setName", "language"],
-    orderBy: { setName: "asc" },
-  });
-  return { sets: sets.map((s) => ({ id: s.setId, name: s.setName, language: s.language })) };
+  const [sets, artistRows] = await Promise.all([
+    prisma.card.groupBy({ by: ["setId", "setName", "language"], orderBy: { setName: "asc" } }),
+    prisma.card.groupBy({ by: ["artist"], where: { artist: { not: null } }, orderBy: { artist: "asc" } }),
+  ]);
+  return {
+    sets: sets.map((s) => ({ id: s.setId, name: s.setName, language: s.language })),
+    artists: artistRows.map((a) => a.artist!).filter(Boolean),
+  };
 }
 
 /**

@@ -52,6 +52,7 @@ import { CardImage, type CardIdentity } from "@/components/card-image";
 import { BinderCard } from "@/components/binder-card";
 import { CardFilters, ActiveFilters } from "@/components/card-filters";
 import { BrandMark } from "@/components/brand-mark";
+import { TypeIcon } from "@/components/type-icon";
 
 const SLOTS_PER_PAGE = 9;
 
@@ -59,7 +60,7 @@ type ImportSummary = Awaited<ReturnType<typeof importCards>>;
 
 type CardLite = CardIdentity & { id: string };
 
-type SearchResult = CardLite & { priceEur: number | null };
+type SearchResult = CardLite & { priceEur: number | null; types: string[] };
 
 type Slot = {
   position: number;
@@ -75,6 +76,7 @@ export function BinderBuilder({
   pageCount,
   initialSlots,
   sets,
+  artists,
   theme,
   isPaid,
 }: {
@@ -82,6 +84,7 @@ export function BinderBuilder({
   pageCount: number;
   initialSlots: Slot[];
   sets: { id: string; name: string; language: string }[];
+  artists: string[];
   theme: string;
   isPaid: boolean;
 }) {
@@ -508,7 +511,7 @@ export function BinderBuilder({
             </div>
 
             <div className="mt-3">
-              <CardFilters value={filters} sets={sets} onChange={setFilters} />
+              <CardFilters value={filters} sets={sets} artists={artists} onChange={setFilters} />
             </div>
 
             <ActiveFilters value={filters} sets={sets} onChange={setFilters} />
@@ -775,8 +778,13 @@ function ResultRow({
       <CardImage card={card} variant="thumb" className="shrink-0" />
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
         <div className="truncate text-sm font-medium">{card.name}</div>
-        <div className="truncate text-xs text-muted-foreground">
-          {card.setName} · #{card.number}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {card.types.slice(0, 3).map((t) => (
+            <TypeIcon key={t} type={t} className="size-3" />
+          ))}
+          <span className="truncate">
+            {card.setName} · #{card.number}
+          </span>
         </div>
       </button>
       <div className="shrink-0 text-right text-xs font-semibold">

@@ -74,6 +74,7 @@ export default async function BuilderPage({
         pageCount={binder.pageCount}
         initialSlots={initialSlots}
         sets={facets.sets}
+        artists={facets.artists}
         theme={binder.theme}
         isPaid={paid}
       />
