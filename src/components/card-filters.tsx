@@ -149,7 +149,7 @@ export function CardFilters({
               className={cn(
                 chip,
                 value.fullArt
-                  ? "holo-text border-transparent bg-white/5"
+                  ? "border-primary bg-primary/20 text-primary"
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
@@ -172,6 +172,68 @@ export function CardFilters({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Always-visible summary of applied filters as removable chips. */
+export function ActiveFilters({
+  value,
+  sets,
+  onChange,
+}: {
+  value: CardFilters;
+  sets: { id: string; name: string }[];
+  onChange: (next: CardFilters) => void;
+}) {
+  const chips: { key: string; label: string; dot?: string; onRemove: () => void }[] = [];
+  if (value.supertype)
+    chips.push({
+      key: "sup",
+      label: value.supertype,
+      onRemove: () => onChange({ ...value, supertype: undefined }),
+    });
+  (value.types ?? []).forEach((t) =>
+    chips.push({
+      key: `t-${t}`,
+      label: t,
+      dot: TYPE_COLOR[t],
+      onRemove: () => onChange({ ...value, types: value.types!.filter((x) => x !== t) }),
+    }),
+  );
+  (value.subtypes ?? []).forEach((s) =>
+    chips.push({
+      key: `s-${s}`,
+      label: s,
+      onRemove: () => onChange({ ...value, subtypes: value.subtypes!.filter((x) => x !== s) }),
+    }),
+  );
+  if (value.fullArt)
+    chips.push({ key: "fa", label: "✦ Full art", onRemove: () => onChange({ ...value, fullArt: undefined }) });
+  if (value.setId)
+    chips.push({
+      key: "set",
+      label: sets.find((s) => s.id === value.setId)?.name ?? "Set",
+      onRemove: () => onChange({ ...value, setId: undefined }),
+    });
+  if (value.artist?.trim())
+    chips.push({ key: "art", label: value.artist, onRemove: () => onChange({ ...value, artist: undefined }) });
+
+  if (chips.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {chips.map((c) => (
+        <button
+          key={c.key}
+          onClick={c.onRemove}
+          className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+          title="Remove filter"
+        >
+          {c.dot && <span className="size-1.5 rounded-full" style={{ background: c.dot }} />}
+          {c.label}
+          <X className="size-3" />
+        </button>
+      ))}
     </div>
   );
 }

@@ -50,7 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CardImage, type CardIdentity } from "@/components/card-image";
 import { BinderCard } from "@/components/binder-card";
-import { CardFilters } from "@/components/card-filters";
+import { CardFilters, ActiveFilters } from "@/components/card-filters";
 import { BrandMark } from "@/components/brand-mark";
 
 const SLOTS_PER_PAGE = 9;
@@ -487,6 +487,8 @@ export function BinderBuilder({
               <CardFilters value={filters} sets={sets} onChange={setFilters} />
             </div>
 
+            <ActiveFilters value={filters} sets={sets} onChange={setFilters} />
+
             <Button
               variant="outline"
               size="sm"
@@ -497,11 +499,19 @@ export function BinderBuilder({
               <Sparkles className="size-4 text-accent" /> Match this binder&apos;s vibe
             </Button>
 
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              {target != null
-                ? `Placing into slot ${target + 1} — click a card or drag it in.`
-                : "Drag a card onto a pocket, or click a pocket first."}
-            </p>
+            <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>
+                {target != null
+                  ? `Placing into pocket ${target + 1}`
+                  : "Drag onto a pocket, or click one first"}
+              </span>
+              {results.length > 0 && (
+                <span>
+                  {results.length}
+                  {results.length >= 60 ? "+" : ""} result{results.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
 
             <div className="mt-2 max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
               {searching && (
