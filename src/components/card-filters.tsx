@@ -7,7 +7,6 @@ import {
   SUPERTYPES,
   POKEMON_TYPES,
   SUBTYPES,
-  TYPE_COLOR,
   LANGUAGES,
   DEFAULT_LANGUAGE,
   hasActiveFilters,
@@ -110,12 +109,13 @@ export function CardFilters({
                   onClick={() => set({ types: toggle(value.types, t) })}
                   title={t}
                   className={cn(
-                    "grid size-8 place-items-center rounded-full border transition-all hover:scale-110",
-                    on ? "" : "border-border opacity-70 hover:opacity-100",
+                    "rounded-full transition-all hover:scale-110",
+                    on
+                      ? "ring-2 ring-white/80 ring-offset-2 ring-offset-background"
+                      : "opacity-40 grayscale hover:opacity-100 hover:grayscale-0",
                   )}
-                  style={on ? { background: `${TYPE_COLOR[t]}22`, borderColor: TYPE_COLOR[t] } : undefined}
                 >
-                  <TypeIcon type={t} className="size-4" />
+                  <TypeIcon type={t} className="size-8" />
                 </button>
               );
             })}
