@@ -11,12 +11,10 @@ export type CardFilters = {
   fullArt?: boolean;
 };
 
-// Languages we have synced data for (TCGdex). Korean is data-sparse / no prices.
+// Languages we surface. Limited to English + Japanese (ES/KO excluded).
 export const LANGUAGES = [
   { code: "en", label: "EN" },
-  { code: "es", label: "ES" },
   { code: "ja", label: "日本語" },
-  { code: "ko", label: "한국어" },
 ] as const;
 
 export const DEFAULT_LANGUAGE = "en";
