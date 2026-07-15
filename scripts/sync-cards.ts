@@ -129,6 +129,7 @@ async function syncSet(lang: string, setId: string): Promise<number> {
     const c = await j<FullCard>(`${BASE}/${lang}/cards/${brief.id}`);
     if (!c) return;
     const id = `${lang}:${c.id}`;
+    const eur = cardmarketEur(c.pricing);
     const data = {
       tcgdexId: c.id,
       language: lang,
@@ -146,12 +147,12 @@ async function syncSet(lang: string, setId: string): Promise<number> {
       types: c.types ?? [],
       artist: c.illustrator ?? null,
       isFullArt: isFullArt(c),
+      marketEur: eur, // denormalized for DB-level price sort
       imageBase: c.image ?? null,
       releasedAt,
     };
     await prisma.card.upsert({ where: { id }, create: { id, ...data }, update: data });
 
-    const eur = cardmarketEur(c.pricing);
     if (eur != null) {
       await prisma.priceSnapshot.create({
         data: { cardId: id, source: "cardmarket", price: eur, currency: "EUR" },

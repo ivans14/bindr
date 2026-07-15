@@ -1,5 +1,7 @@
 // Shared, pure definitions for card filtering (safe in client and server).
 
+export type CardSort = "relevance" | "priceDesc" | "priceAsc" | "name" | "number";
+
 export type CardFilters = {
   query?: string;
   language?: string; // en | es | ja … (context, not a result-triggering filter)
@@ -9,6 +11,7 @@ export type CardFilters = {
   artist?: string; // free-text (contains)
   setId?: string;
   fullArt?: boolean;
+  sort?: CardSort; // result ordering (applied in the DB, not client-side)
 };
 
 // Languages we surface. Limited to English + Japanese (ES/KO excluded).

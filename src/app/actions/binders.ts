@@ -198,22 +198,30 @@ export async function searchCards(filters: CardFilters) {
   if (filters.types?.length) where.types = { hasSome: filters.types };
   if (filters.subtypes?.length) where.subtypes = { hasSome: filters.subtypes };
 
+  // Sort in the DB so the top of the full result set is returned (e.g. the priciest
+  // match), not just an ordering of the first alphabetical 60. marketEur is a
+  // denormalized copy of each card's latest Cardmarket EUR, so price sorts hit an index.
+  const byPrice = (dir: "asc" | "desc"): Prisma.CardOrderByWithRelationInput[] => [
+    { marketEur: { sort: dir, nulls: "last" } },
+    { name: "asc" },
+  ];
+  const orderBy: Prisma.CardOrderByWithRelationInput[] =
+    filters.sort === "priceDesc"
+      ? byPrice("desc")
+      : filters.sort === "priceAsc"
+        ? byPrice("asc")
+        : filters.sort === "number"
+          ? [{ setName: "asc" }, { number: "asc" }]
+          : [{ name: "asc" }, { releasedAt: "desc" }]; // relevance / name default
+
   const cards = await prisma.card.findMany({
     where,
-    orderBy: [{ name: "asc" }, { releasedAt: "desc" }],
+    orderBy,
     take: 60,
-    select: { id: true, name: true, number: true, setName: true, imageBase: true, types: true },
+    select: { id: true, name: true, number: true, setName: true, imageBase: true, types: true, marketEur: true },
   });
 
-  const prices = await prisma.priceSnapshot.findMany({
-    where: { cardId: { in: cards.map((c) => c.id) }, source: "cardmarket", currency: "EUR" },
-    orderBy: { fetchedAt: "desc" },
-    select: { cardId: true, price: true },
-  });
-  const priceMap = new Map<string, number>();
-  for (const p of prices) if (!priceMap.has(p.cardId)) priceMap.set(p.cardId, Number(p.price));
-
-  return cards.map((c) => ({ ...c, priceEur: priceMap.get(c.id) ?? null }));
+  return cards.map(({ marketEur, ...c }) => ({ ...c, priceEur: marketEur == null ? null : Number(marketEur) }));
 }
 
 /**

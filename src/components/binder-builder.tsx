@@ -105,9 +105,7 @@ export function BinderBuilder({
   const [activeCard, setActiveCard] = useState<SearchResult | null>(null);
   const [activeWidth, setActiveWidth] = useState(170);
   const [target, setTarget] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<"relevance" | "priceDesc" | "priceAsc" | "name" | "number">(
-    "relevance",
-  );
+  const sortBy = filters.sort ?? "relevance";
   const [preview, setPreview] = useState<{ card: SearchResult; top: number; left: number } | null>(
     null,
   );
@@ -358,25 +356,6 @@ export function BinderBuilder({
     return res;
   }
 
-  const sortedResults = useMemo(() => {
-    const arr = [...results];
-    switch (sortBy) {
-      case "priceDesc":
-        return arr.sort((a, b) => (b.priceEur ?? -1) - (a.priceEur ?? -1));
-      case "priceAsc":
-        return arr.sort((a, b) => (a.priceEur ?? Infinity) - (b.priceEur ?? Infinity));
-      case "name":
-        return arr.sort((a, b) => a.name.localeCompare(b.name));
-      case "number":
-        return arr.sort(
-          (a, b) =>
-            (parseInt(a.number) || 0) - (parseInt(b.number) || 0) ||
-            a.number.localeCompare(b.number),
-        );
-      default:
-        return arr;
-    }
-  }, [results, sortBy]);
 
   const pageArray = Array.from({ length: pages }, (_, p) =>
     slots.filter((s) => Math.floor(s.position / SLOTS_PER_PAGE) === p),
@@ -559,7 +538,9 @@ export function BinderBuilder({
                 <div className="flex shrink-0 items-center gap-2">
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    onChange={(e) =>
+                      setFilters((f) => ({ ...f, sort: e.target.value as typeof sortBy }))
+                    }
                     className="rounded border border-input bg-background/60 px-1 py-0.5 text-[11px]"
                   >
                     <option value="relevance">Relevance</option>
@@ -585,7 +566,7 @@ export function BinderBuilder({
               {!searching && hasActiveFilters(filters) && results.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">No cards found.</p>
               )}
-              {sortedResults.map((card) => (
+              {results.map((card) => (
                 <ResultRow
                   key={card.id}
                   card={card}

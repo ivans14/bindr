@@ -131,6 +131,7 @@ model Card {
   types      String[] // energy types: Fire, Water, …
   artist     String?
   isFullArt  Boolean   @default(false) // heuristic (illustration/alt/secret art)
+  marketEur  Decimal?  @db.Decimal(10, 2) // denormalized latest Cardmarket EUR, for sorting
   imageBase  String? // TCGdex asset base; append `/high.png`, `/low.png`
   releasedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -145,6 +146,7 @@ model Card {
   @@index([language])
   @@index([supertype])
   @@index([artist])
+  @@index([marketEur])
   @@map("card")
 }
 
