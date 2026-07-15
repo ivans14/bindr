@@ -5,6 +5,7 @@ import { latestEurPrices } from "@/lib/pricing";
 import { formatEur } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { BinderCover } from "@/components/binder-cover";
 
 export const metadata = { title: "Explore binders — bindr" };
 
@@ -15,7 +16,14 @@ export default async function ExplorePage() {
     take: 30,
     include: {
       owner: { select: { name: true } },
-      slots: { where: { cardId: { not: null } }, select: { cardId: true } },
+      slots: {
+        where: { cardId: { not: null } },
+        orderBy: { position: "asc" },
+        select: {
+          cardId: true,
+          card: { select: { name: true, number: true, setName: true, imageBase: true } },
+        },
+      },
     },
   });
 
@@ -45,12 +53,15 @@ export default async function ExplorePage() {
             const value = b.slots.reduce((sum, s) => sum + (prices.get(s.cardId!) ?? 0), 0);
             return (
               <Link key={b.id} href={`/b/${b.id}`}>
-                <Card className="h-full p-5 transition-colors hover:border-primary/50">
+                <Card className="h-full overflow-hidden p-5 transition-colors hover:border-primary/50">
                   <h3 className="font-display text-lg font-semibold">{b.title}</h3>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     by {b.owner.name || "a collector"}
                   </p>
-                  <div className="mt-5 flex items-end justify-between">
+                  <div className="mt-4">
+                    <BinderCover cards={b.slots.map((s) => s.card!).filter(Boolean)} />
+                  </div>
+                  <div className="mt-4 flex items-end justify-between">
                     <Badge variant="muted">{b.slots.length} cards</Badge>
                     <div className="text-lg font-bold">{formatEur(value)}</div>
                   </div>

@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BinderCover } from "@/components/binder-cover";
 
 const visIcon = { PRIVATE: Lock, UNLISTED: Link2, PUBLIC: Globe } as const;
 
@@ -18,7 +19,16 @@ export default async function BindersPage() {
   const binders = await prisma.binder.findMany({
     where: { ownerId: user.id },
     orderBy: { updatedAt: "desc" },
-    include: { slots: { where: { cardId: { not: null } }, select: { cardId: true } } },
+    include: {
+      slots: {
+        where: { cardId: { not: null } },
+        orderBy: { position: "asc" },
+        select: {
+          cardId: true,
+          card: { select: { name: true, number: true, setName: true, imageBase: true } },
+        },
+      },
+    },
   });
 
   const allCardIds = [...new Set(binders.flatMap((b) => b.slots.map((s) => s.cardId!)))];
@@ -53,7 +63,7 @@ export default async function BindersPage() {
             const Vis = visIcon[b.visibility];
             return (
               <Link key={b.id} href={`/binders/${b.id}`}>
-                <Card className="group h-full p-5 transition-colors hover:border-primary/50">
+                <Card className="group h-full overflow-hidden p-5 transition-colors hover:border-primary/50">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-display text-lg font-semibold group-hover:text-primary">
                       {b.title}
@@ -62,7 +72,10 @@ export default async function BindersPage() {
                       <Vis className="size-3" /> {b.visibility.toLowerCase()}
                     </Badge>
                   </div>
-                  <div className="mt-6 flex items-end justify-between">
+                  <div className="mt-4">
+                    <BinderCover cards={b.slots.map((s) => s.card!).filter(Boolean)} />
+                  </div>
+                  <div className="mt-4 flex items-end justify-between">
                     <div>
                       <div className="text-2xl font-bold">{formatEur(value)}</div>
                       <div className="text-xs text-muted-foreground">est. market value</div>
