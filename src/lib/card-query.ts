@@ -16,6 +16,7 @@ export const LANGUAGES = [
   { code: "en", label: "EN" },
   { code: "es", label: "ES" },
   { code: "ja", label: "日本語" },
+  { code: "ko", label: "한국어" },
 ] as const;
 
 export const DEFAULT_LANGUAGE = "en";

@@ -222,10 +222,11 @@ async function cloneLang(baseLang: string, toLang: string) {
   });
   let total = 0;
   for (const { setId } of sets) {
-    const brief = await j<{ cards?: { id: string; name?: string; image?: string }[] }>(
+    const brief = await j<{ name?: string; cards?: { id: string; name?: string; image?: string }[] }>(
       `${BASE}/${toLang}/sets/${setId}`,
     );
     if (!brief?.cards?.length) continue;
+    const localizedSetName = brief.name;
     const briefById = new Map(brief.cards.map((c) => [c.id, c]));
     const base = await prisma.card.findMany({
       where: { language: baseLang, setId },
@@ -260,7 +261,7 @@ async function cloneLang(baseLang: string, toLang: string) {
         dexId: b.dexId,
         number: b.number,
         setId,
-        setName: b.setName,
+        setName: localizedSetName ?? b.setName,
         setSeries: b.setSeries,
         rarity: b.rarity,
         supertype: b.supertype,
