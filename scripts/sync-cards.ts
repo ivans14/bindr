@@ -204,8 +204,119 @@ async function backfillNameEn() {
   console.log(`Backfilled English names on ${n} cards from ${species.size} Pokédex entries.`);
 }
 
+async function listSetIds(lang: string): Promise<string[]> {
+  const all = (await j<{ id: string }[]>(`${BASE}/${lang}/sets`)) ?? [];
+  return all.map((s) => s.id);
+}
+
+/**
+ * Clone a language from an already-synced base language (en→es, ja→ko). Western
+ * sets share ids across en/es; JP sets across ja/ko. Only the name + image differ
+ * per language, so we copy the base card's taxonomy/prices and localize name+image.
+ */
+async function cloneLang(baseLang: string, toLang: string) {
+  const sets = await prisma.card.findMany({
+    where: { language: baseLang },
+    distinct: ["setId"],
+    select: { setId: true },
+  });
+  let total = 0;
+  for (const { setId } of sets) {
+    const brief = await j<{ cards?: { id: string; name?: string; image?: string }[] }>(
+      `${BASE}/${toLang}/sets/${setId}`,
+    );
+    if (!brief?.cards?.length) continue;
+    const briefById = new Map(brief.cards.map((c) => [c.id, c]));
+    const base = await prisma.card.findMany({
+      where: { language: baseLang, setId },
+      select: {
+        tcgdexId: true,
+        name: true,
+        nameEn: true,
+        dexId: true,
+        number: true,
+        setName: true,
+        setSeries: true,
+        rarity: true,
+        supertype: true,
+        subtypes: true,
+        types: true,
+        artist: true,
+        isFullArt: true,
+        releasedAt: true,
+      },
+    });
+
+    let n = 0;
+    for (const b of base) {
+      const bc = briefById.get(b.tcgdexId);
+      if (!bc) continue;
+      const id = `${toLang}:${b.tcgdexId}`;
+      const data = {
+        tcgdexId: b.tcgdexId,
+        language: toLang,
+        name: bc.name ?? b.name,
+        nameEn: b.nameEn,
+        dexId: b.dexId,
+        number: b.number,
+        setId,
+        setName: b.setName,
+        setSeries: b.setSeries,
+        rarity: b.rarity,
+        supertype: b.supertype,
+        subtypes: b.subtypes,
+        types: b.types,
+        artist: b.artist,
+        isFullArt: b.isFullArt,
+        imageBase: bc.image ?? null,
+        releasedAt: b.releasedAt,
+      };
+      await prisma.card.upsert({ where: { id }, create: { id, ...data }, update: data });
+
+      // Clone latest price per source from the base sibling (same market product).
+      const baseId = `${baseLang}:${b.tcgdexId}`;
+      const prices = await prisma.priceSnapshot.findMany({
+        where: { cardId: baseId },
+        orderBy: { fetchedAt: "desc" },
+        distinct: ["source"],
+        select: { source: true, price: true, currency: true, variant: true },
+      });
+      if (prices.length) {
+        await prisma.priceSnapshot.deleteMany({ where: { cardId: id } });
+        await prisma.priceSnapshot.createMany({
+          data: prices.map((p) => ({ cardId: id, ...p })),
+        });
+      }
+      n++;
+    }
+    total += n;
+    if (n) console.log(`  clone ${toLang}:${setId} — ${n}`);
+  }
+  console.log(`Cloned ${total} ${toLang} cards from ${baseLang}.`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
+
+  if (args.includes("--languages")) {
+    // Full multi-language catalog: es cloned from en, all JP sets, ko cloned from ja.
+    console.log("=== Cloning ES from EN ===");
+    await cloneLang("en", "es");
+    console.log("=== Full JA sync ===");
+    const jaSets = await listSetIds("ja");
+    let ja = 0;
+    for (const s of jaSets) {
+      const n = await syncSet("ja", s);
+      ja += n;
+      if (n) console.log(`  ✓ ja:${s} — ${n}`);
+    }
+    console.log(`JA: ${ja} cards across ${jaSets.length} sets`);
+    console.log("=== Cloning KO from JA ===");
+    await cloneLang("ja", "ko");
+    await backfillNameEn();
+    console.log("Done (languages).");
+    return;
+  }
   let targets: { lang: string; sets: string[] }[];
   if (args.includes("--all-en")) {
     // Every English set in the catalog.
