@@ -7,8 +7,6 @@ import { CardImage } from "@/components/card-image";
 import { BrandMark } from "@/components/brand-mark";
 import { themeBackground, sleeveBackground } from "@/lib/binder-style";
 
-const SLOTS_PER_PAGE = 9;
-
 export default async function PublicBinderPage({
   params,
 }: {
@@ -34,8 +32,9 @@ export default async function PublicBinderPage({
   const prices = await latestEurPrices(cardIds);
   const value = cardIds.reduce((sum, cid) => sum + (prices.get(cid) ?? 0), 0);
 
+  const pageSize = binder.columns * binder.rows;
   const pages = Array.from({ length: binder.pageCount }, (_, p) =>
-    binder.slots.filter((s) => Math.floor(s.position / SLOTS_PER_PAGE) === p),
+    binder.slots.filter((s) => Math.floor(s.position / pageSize) === p),
   );
 
   return (
@@ -58,8 +57,11 @@ export default async function PublicBinderPage({
               Page {p + 1}
             </div>
             <div
-              className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-4"
-              style={{ background: themeBackground(binder.theme) }}
+              className="grid gap-3 rounded-2xl border border-border p-4"
+              style={{
+                background: themeBackground(binder.theme),
+                gridTemplateColumns: `repeat(${binder.columns}, minmax(0, 1fr))`,
+              }}
             >
               {pageSlots.map((s) => (
                 <div

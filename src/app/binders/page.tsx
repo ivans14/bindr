@@ -44,7 +44,17 @@ export default async function BindersPage() {
           </p>
         </div>
         <form action={createBinder} className="flex items-center gap-2">
-          <Input name="title" placeholder="New binder name" className="w-52" />
+          <Input name="title" placeholder="New binder name" className="w-44" />
+          <select
+            name="size"
+            defaultValue="3"
+            title="Pocket layout"
+            className="h-10 rounded-lg border border-input bg-background/40 px-2 text-sm"
+          >
+            <option value="2">2×2</option>
+            <option value="3">3×3</option>
+            <option value="4">4×4</option>
+          </select>
           <Button type="submit" className="gap-1.5">
             <Plus className="size-4" /> Create
           </Button>

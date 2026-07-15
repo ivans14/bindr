@@ -27,6 +27,7 @@ import {
   Wand2,
   ChevronLeft,
   ChevronRight,
+  Maximize2,
 } from "lucide-react";
 import { formatEur } from "@/lib/format";
 import {
@@ -53,8 +54,7 @@ import { BinderCard } from "@/components/binder-card";
 import { CardFilters, ActiveFilters } from "@/components/card-filters";
 import { BrandMark } from "@/components/brand-mark";
 import { TypeIcon } from "@/components/type-icon";
-
-const SLOTS_PER_PAGE = 9;
+import { CardDetailDialog } from "@/components/card-detail-dialog";
 
 type ImportSummary = Awaited<ReturnType<typeof importCards>>;
 
@@ -79,6 +79,8 @@ export function BinderBuilder({
   artists,
   theme,
   isPaid,
+  columns,
+  rows,
 }: {
   binderId: string;
   pageCount: number;
@@ -87,7 +89,10 @@ export function BinderBuilder({
   artists: string[];
   theme: string;
   isPaid: boolean;
+  columns: number;
+  rows: number;
 }) {
+  const SLOTS_PER_PAGE = columns * rows;
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [pages, setPages] = useState(pageCount);
   const [spread, setSpread] = useState(false); // false = 1 page, true = 2-page spread
@@ -106,6 +111,7 @@ export function BinderBuilder({
   const [preview, setPreview] = useState<{ card: SearchResult; top: number; left: number } | null>(
     null,
   );
+  const [detailCardId, setDetailCardId] = useState<string | null>(null);
   function showPreview(card: SearchResult | null, rect: DOMRect | null) {
     if (!card || !rect) {
       setPreview(null);
@@ -461,8 +467,11 @@ export function BinderBuilder({
                     Page {p + 1}
                   </div>
                   <div
-                    className="grid grid-cols-3 gap-3 rounded-2xl border border-border p-4"
-                    style={{ background: themeBackground(themeKey) }}
+                    className="grid gap-3 rounded-2xl border border-border p-4"
+                    style={{
+                      background: themeBackground(themeKey),
+                      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                    }}
                   >
                     {pageSlots.map((slot) => (
                       <SlotCell
@@ -472,6 +481,7 @@ export function BinderBuilder({
                         onSelect={() => setTarget(target === slot.position ? null : slot.position)}
                         onRemove={() => remove(slot.position)}
                         onToggle={() => toggleStatus(slot.position)}
+                        onExpand={() => slot.card && setDetailCardId(slot.card.id)}
                       />
                     ))}
                   </div>
@@ -581,6 +591,7 @@ export function BinderBuilder({
                   card={card}
                   onClick={() => clickPlace(card)}
                   onPreview={showPreview}
+                  onExpand={() => setDetailCardId(card.id)}
                 />
               ))}
             </div>
@@ -639,6 +650,8 @@ export function BinderBuilder({
           </div>
         </div>
       )}
+
+      <CardDetailDialog cardId={detailCardId} onClose={() => setDetailCardId(null)} />
     </DndContext>
   );
 }
@@ -675,12 +688,14 @@ function SlotCell({
   onSelect,
   onRemove,
   onToggle,
+  onExpand,
 }: {
   slot: Slot;
   selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onToggle: () => void;
+  onExpand: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `slot-${slot.position}`,
@@ -727,6 +742,7 @@ function SlotCell({
             status={slot.status === "OWNED" ? "OWNED" : "WANTED"}
             onToggleStatus={onToggle}
             onRemove={onRemove}
+            onExpand={onExpand}
           />
         </div>
       ) : slot.sleeve ? (
@@ -770,10 +786,12 @@ function ResultRow({
   card,
   onClick,
   onPreview,
+  onExpand,
 }: {
   card: SearchResult;
   onClick: () => void;
   onPreview: (c: SearchResult | null, rect: DOMRect | null) => void;
+  onExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `card-${card.id}`,
@@ -786,7 +804,7 @@ function ResultRow({
       style={{ opacity: isDragging ? 0.4 : 1 }}
       onMouseEnter={(e) => onPreview(card, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={() => onPreview(null, null)}
-      className="flex items-center gap-2.5 rounded-lg border border-transparent p-1.5 hover:border-border hover:bg-muted/50"
+      className="group flex items-center gap-2.5 rounded-lg border border-transparent p-1.5 hover:border-border hover:bg-muted/50"
     >
       <button {...listeners} {...attributes} className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing">
         <GripVertical className="size-4" />
@@ -806,6 +824,13 @@ function ResultRow({
       <div className="shrink-0 text-right text-xs font-semibold">
         {card.priceEur != null ? formatEur(card.priceEur) : "—"}
       </div>
+      <button
+        onClick={onExpand}
+        title="Card details"
+        className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+      >
+        <Maximize2 className="size-3.5" />
+      </button>
     </div>
   );
 }

@@ -9,8 +9,6 @@ import { requireUser, isPaid } from "@/lib/session";
 import type { CardFilters } from "@/lib/card-query";
 import { hasActiveFilters } from "@/lib/card-query";
 
-const SLOTS_PER_PAGE = 9;
-
 /** Load a binder the current user owns, or throw. */
 async function ownedBinder(binderId: string) {
   const user = await requireUser();
@@ -22,13 +20,17 @@ async function ownedBinder(binderId: string) {
 export async function createBinder(formData: FormData) {
   const user = await requireUser();
   const title = (formData.get("title") as string)?.trim() || "Untitled binder";
+  const sizeRaw = parseInt((formData.get("size") as string) || "3", 10);
+  const size = [2, 3, 4].includes(sizeRaw) ? sizeRaw : 3; // 2x2, 3x3, or 4x4 pages
 
   const binder = await prisma.binder.create({
     data: {
       ownerId: user.id,
       title,
+      rows: size,
+      columns: size,
       slots: {
-        create: Array.from({ length: SLOTS_PER_PAGE }, (_, i) => ({ position: i })),
+        create: Array.from({ length: size * size }, (_, i) => ({ position: i })),
       },
     },
   });
@@ -38,14 +40,15 @@ export async function createBinder(formData: FormData) {
 
 export async function addPage(binderId: string) {
   const binder = await ownedBinder(binderId);
-  const start = binder.pageCount * SLOTS_PER_PAGE;
+  const pageSize = binder.columns * binder.rows;
+  const start = binder.pageCount * pageSize;
   await prisma.$transaction([
     prisma.binder.update({
       where: { id: binderId },
       data: { pageCount: { increment: 1 } },
     }),
     prisma.binderSlot.createMany({
-      data: Array.from({ length: SLOTS_PER_PAGE }, (_, i) => ({
+      data: Array.from({ length: pageSize }, (_, i) => ({
         binderId,
         position: start + i,
       })),
@@ -304,6 +307,38 @@ export async function similarCards(binderId: string) {
   }));
 }
 
+/** Full details for the card-detail dialog (rarity, artist, both prices). */
+export async function getCardDetail(cardId: string) {
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    select: {
+      id: true,
+      name: true,
+      number: true,
+      setName: true,
+      rarity: true,
+      artist: true,
+      supertype: true,
+      types: true,
+      imageBase: true,
+    },
+  });
+  if (!card) return null;
+  const prices = await prisma.priceSnapshot.findMany({
+    where: { cardId },
+    orderBy: { fetchedAt: "desc" },
+    distinct: ["source"],
+    select: { source: true, price: true },
+  });
+  const eur = prices.find((p) => p.source === "cardmarket");
+  const usd = prices.find((p) => p.source === "tcgplayer");
+  return {
+    ...card,
+    eur: eur ? Number(eur.price) : null,
+    usd: usd ? Number(usd.price) : null,
+  };
+}
+
 /** Filter facets that are data-dependent (sets per language, artists). */
 export async function getCardFacets() {
   const [sets, artistRows] = await Promise.all([
@@ -407,6 +442,7 @@ export async function importCards(binderId: string, text: string) {
     where: { binderId },
     orderBy: { position: "asc" },
   });
+  const pageSize = binder.columns * binder.rows;
   const emptyPositions = slots.filter((s) => !s.cardId).map((s) => s.position);
   let nextNewPos = slots.length ? Math.max(...slots.map((s) => s.position)) + 1 : 0;
 
@@ -414,7 +450,7 @@ export async function importCards(binderId: string, text: string) {
   let pagesAdded = 0;
   const newSlots: { binderId: string; position: number }[] = [];
   while (emptyPositions.length + newSlots.length < resolved.length) {
-    for (let i = 0; i < SLOTS_PER_PAGE; i++) {
+    for (let i = 0; i < pageSize; i++) {
       newSlots.push({ binderId, position: nextNewPos });
       emptyPositions.push(nextNewPos);
       nextNewPos++;

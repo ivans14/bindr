@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Check, ShoppingBag } from "lucide-react";
+import { X, Check, ShoppingBag, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CardImage, type CardIdentity } from "@/components/card-image";
 
@@ -20,6 +20,7 @@ export function BinderCard({
   selected,
   onToggleStatus,
   onRemove,
+  onExpand,
   className,
 }: {
   card: CardIdentity;
@@ -28,6 +29,7 @@ export function BinderCard({
   selected?: boolean;
   onToggleStatus?: () => void;
   onRemove?: () => void;
+  onExpand?: () => void;
   className?: string;
 }) {
   const owned = status === "OWNED";
@@ -54,6 +56,17 @@ export function BinderCard({
       )}
     >
       <CardImage card={card} variant="fill" />
+
+      {onExpand && (
+        <button
+          onPointerDown={stop}
+          onClick={onExpand}
+          className="absolute left-1 top-1 grid size-6 place-items-center rounded-md bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-primary hover:text-primary-foreground group-hover:opacity-100"
+          title="Card details"
+        >
+          <Maximize2 className="size-3.5" />
+        </button>
+      )}
 
       {onRemove && (
         <button

@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, isPaid } from "@/lib/session";
 import { latestEurPrices } from "@/lib/pricing";
 
-const SLOTS_PER_PAGE = 9;
 const MAX_STEPS = 8; // bound the agent loop (token cost)
 const MODEL = "claude-sonnet-5";
 
@@ -163,11 +162,12 @@ export async function assembleBinder(binderId: string, prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "AI assembly isn't configured yet (missing Anthropic key)." };
 
+  const pageSize = binder.columns * binder.rows;
   const emptyPositions = binder.slots
     .filter((s) => !s.cardId && !s.sleeve && !s.customImage)
     .map((s) => s.position)
     .sort((a, b) => a - b);
-  const capacity = Math.min(18, Math.max(emptyPositions.length, SLOTS_PER_PAGE));
+  const capacity = Math.min(18, Math.max(emptyPositions.length, pageSize));
 
   let proposal: { cardIds: string[]; note: string };
   try {
@@ -193,7 +193,7 @@ export async function assembleBinder(binderId: string, prompt: string) {
   let pagesAdded = 0;
   const newSlots: { binderId: string; position: number }[] = [];
   while (positions.length + newSlots.length < ordered.length) {
-    for (let i = 0; i < SLOTS_PER_PAGE; i++) {
+    for (let i = 0; i < pageSize; i++) {
       newSlots.push({ binderId, position: nextNewPos });
       positions.push(nextNewPos);
       nextNewPos++;

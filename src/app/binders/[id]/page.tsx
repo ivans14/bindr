@@ -76,6 +76,8 @@ export default async function BuilderPage({
         artists={facets.artists}
         theme={binder.theme}
         isPaid={paid}
+        columns={binder.columns}
+        rows={binder.rows}
       />
     </div>
   );
