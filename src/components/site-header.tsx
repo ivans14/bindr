@@ -32,21 +32,23 @@ export async function SiteHeader() {
         <div className="flex items-center gap-2 sm:gap-3">
           {user ? (
             <>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/binders">My binders</Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/orders">Orders</Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/account">Account</Link>
-              </Button>
-              {isAdmin && (
+              <div className="hidden items-center gap-1 md:flex">
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/ops">Ops</Link>
+                  <Link href="/binders">My binders</Link>
                 </Button>
-              )}
-              <UserMenu name={user.name ?? ""} email={user.email} />
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/orders">Orders</Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/account">Account</Link>
+                </Button>
+                {isAdmin && (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/ops">Ops</Link>
+                  </Button>
+                )}
+              </div>
+              <UserMenu name={user.name ?? ""} email={user.email} isAdmin={isAdmin} />
             </>
           ) : (
             <>
