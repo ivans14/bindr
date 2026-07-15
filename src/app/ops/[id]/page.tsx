@@ -94,6 +94,8 @@ export default async function OpsOrderPage({ params }: { params: Promise<{ id: s
             setName: i.setName,
             number: i.number,
             sourced: i.sourced,
+            priceEur: Number(i.priceEur ?? 0),
+            sourcedPrice: i.sourcedPrice != null ? Number(i.sourcedPrice) : null,
           }))}
           carrier={order.carrier}
           trackingCode={order.trackingCode}

@@ -144,6 +144,17 @@ export async function setItemSourced(orderId: string, itemId: string, sourced: b
   revalidatePath(`/ops/${orderId}`);
 }
 
+/** Record the actual price paid to source a card (for slippage/margin tracking). */
+export async function setSourcedPrice(orderId: string, itemId: string, price: number | null) {
+  await requireAdmin();
+  const clean = price != null && Number.isFinite(price) && price >= 0 ? price : null;
+  await prisma.fulfillmentItem.update({
+    where: { id: itemId },
+    data: { sourcedPrice: clean, ...(clean != null ? { sourced: true } : {}) },
+  });
+  revalidatePath(`/ops/${orderId}`);
+}
+
 export async function setTracking(orderId: string, carrier: string, code: string) {
   await requireAdmin();
   const order = await prisma.fulfillmentOrder.update({

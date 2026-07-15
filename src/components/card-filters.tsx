@@ -158,18 +158,11 @@ export function CardFilters({
           </div>
 
           <div className="grid gap-2">
-            <select
-              value={value.setId ?? ""}
-              onChange={(e) => set({ setId: e.target.value || undefined })}
-              className="h-9 w-full rounded-lg border border-input bg-background/60 px-2 text-sm"
-            >
-              <option value="">All sets</option>
-              {langSets.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <SetCombobox
+              sets={langSets}
+              value={value.setId}
+              onChange={(id) => set({ setId: id })}
+            />
             <input
               value={value.artist ?? ""}
               onChange={(e) => set({ artist: e.target.value || undefined })}
@@ -177,6 +170,71 @@ export function CardFilters({
               className="h-9 w-full rounded-lg border border-input bg-background/60 px-3 text-sm placeholder:text-muted-foreground"
             />
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SetCombobox({
+  sets,
+  value,
+  onChange,
+}: {
+  sets: { id: string; name: string }[];
+  value?: string;
+  onChange: (id: string | undefined) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = sets.find((s) => s.id === value);
+  const filtered = (q ? sets.filter((s) => s.name.toLowerCase().includes(q.toLowerCase())) : sets).slice(0, 60);
+
+  return (
+    <div className="relative">
+      <input
+        value={open ? q : (selected?.name ?? "")}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setOpen(true);
+          setQ("");
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="All sets"
+        className="h-9 w-full rounded-lg border border-input bg-background/60 px-3 text-sm placeholder:text-muted-foreground"
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-xl">
+          <button
+            onMouseDown={() => {
+              onChange(undefined);
+              setOpen(false);
+            }}
+            className="block w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
+          >
+            All sets
+          </button>
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              onMouseDown={() => {
+                onChange(s.id);
+                setOpen(false);
+              }}
+              className={cn(
+                "block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted",
+                s.id === value && "text-primary",
+              )}
+            >
+              {s.name}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No sets match.</div>
+          )}
         </div>
       )}
     </div>

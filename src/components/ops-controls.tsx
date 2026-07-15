@@ -3,18 +3,32 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Loader2 } from "lucide-react";
-import { advanceFulfillment, setItemSourced, setTracking } from "@/app/actions/fulfillment";
+import {
+  advanceFulfillment,
+  setItemSourced,
+  setSourcedPrice,
+  setTracking,
+} from "@/app/actions/fulfillment";
 import {
   NEXT_STATES,
   STATE_LABEL,
   cardmarketSearch,
   type FulfillmentState,
 } from "@/lib/fulfillment";
+import { formatEur } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
-type Item = { id: string; name: string; setName: string; number: string; sourced: boolean };
+type Item = {
+  id: string;
+  name: string;
+  setName: string;
+  number: string;
+  sourced: boolean;
+  priceEur: number;
+  sourcedPrice: number | null;
+};
 
 export function OpsControls({
   orderId,
@@ -55,9 +69,22 @@ export function OpsControls({
       router.refresh();
     });
   }
+  function savePrice(id: string, raw: string) {
+    const n = raw.trim() === "" ? null : Number(raw);
+    const clean = n != null && Number.isFinite(n) && n >= 0 ? n : null;
+    setLocalItems((prev) => prev.map((i) => (i.id === id ? { ...i, sourcedPrice: clean } : i)));
+    start(async () => {
+      await setSourcedPrice(orderId, id, clean);
+      router.refresh();
+    });
+  }
 
   const sourced = localItems.filter((i) => i.sourced).length;
   const next = NEXT_STATES[state];
+  const priced = localItems.filter((i) => i.sourcedPrice != null);
+  const sourcedTotal = priced.reduce((s, i) => s + (i.sourcedPrice ?? 0), 0);
+  const quotedForPriced = priced.reduce((s, i) => s + i.priceEur, 0);
+  const delta = sourcedTotal - quotedForPriced;
 
   return (
     <div className="space-y-4">
@@ -87,17 +114,27 @@ export function OpsControls({
 
       {/* Sourcing worklist */}
       <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Sourcing worklist</h2>
           <span className="text-xs text-muted-foreground">
             {sourced}/{localItems.length} sourced
           </span>
         </div>
+        {priced.length > 0 && (
+          <div className="mb-3 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs">
+            {priced.length}/{localItems.length} priced · actual <b>{formatEur(sourcedTotal)}</b> vs
+            quoted {formatEur(quotedForPriced)}{" "}
+            <span className={delta > 0 ? "text-destructive" : "text-accent"}>
+              ({delta >= 0 ? "+" : ""}
+              {formatEur(delta)})
+            </span>
+          </div>
+        )}
         <ul className="space-y-1.5">
           {localItems.map((it) => (
             <li
               key={it.id}
-              className="flex items-center gap-3 rounded-lg border border-border/60 p-2"
+              className="flex items-center gap-2.5 rounded-lg border border-border/60 p-2"
             >
               <input
                 type="checkbox"
@@ -110,6 +147,18 @@ export function OpsControls({
                 <div className="truncate text-xs text-muted-foreground">
                   {it.setName} · #{it.number}
                 </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1" title="Actual sourced cost">
+                <span className="text-xs text-muted-foreground">€</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={it.sourcedPrice ?? ""}
+                  onBlur={(e) => savePrice(it.id, e.target.value)}
+                  placeholder={it.priceEur.toFixed(2)}
+                  className="h-7 w-16 rounded border border-input bg-background/60 px-1.5 text-xs"
+                />
               </div>
               <a
                 href={cardmarketSearch(it.name)}

@@ -257,10 +257,11 @@ model FulfillmentItem {
   name      String
   setName   String
   number    String
-  imageBase String?
-  priceEur  Decimal?         @db.Decimal(10, 2)
-  sourced   Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  imageBase    String?
+  priceEur     Decimal?      @db.Decimal(10, 2) // quoted (daily estimate)
+  sourcedPrice Decimal?      @db.Decimal(10, 2) // actual cost paid at sourcing
+  sourced      Boolean       @default(false)
+  createdAt    DateTime      @default(now())
 
   @@index([orderId])
   @@map("fulfillment_item")
