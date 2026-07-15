@@ -27,7 +27,15 @@ const DEFAULT_TARGETS: { lang: string; sets: string[] }[] = [
 
 type Brief = { id: string; localId?: string; name?: string };
 type Pricing = {
-  cardmarket?: { unit?: string; trend?: number | null; avg?: number | null; avg30?: number | null };
+  cardmarket?: {
+    unit?: string;
+    trend?: number | null;
+    avg?: number | null;
+    avg30?: number | null;
+    "trend-holo"?: number | null;
+    "avg-holo"?: number | null;
+    "avg30-holo"?: number | null;
+  };
   tcgplayer?: Record<string, { marketPrice?: number | null } | string | undefined>;
 };
 type FullCard = {
@@ -82,7 +90,12 @@ function isFullArt(c: FullCard): boolean {
 function cardmarketEur(p?: Pricing): number | null {
   const cm = p?.cardmarket;
   if (!cm) return null;
-  return cm.trend ?? cm.avg ?? cm.avg30 ?? null;
+  const base = cm.trend ?? cm.avg ?? cm.avg30 ?? null;
+  // Holo/Illustration/Secret rares carry their value in the holo price; the base
+  // trend for those products is often ~€0. Prefer holo when it's the higher figure.
+  const holo = cm["trend-holo"] ?? cm["avg-holo"] ?? cm["avg30-holo"] ?? null;
+  if (holo != null && (base == null || holo > base)) return holo;
+  return base ?? holo ?? null;
 }
 
 function tcgplayerUsd(p?: Pricing): number | null {

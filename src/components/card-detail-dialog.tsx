@@ -46,7 +46,8 @@ export function CardDetailDialog({
   }, [cardId, onClose]);
 
   if (!cardId) return null;
-  const q = detail ? encodeURIComponent(detail.name) : "";
+  // Cardmarket/TCGplayer index by English name — use it for localized (JA) cards.
+  const q = detail ? encodeURIComponent(detail.nameEn || detail.name) : "";
   const cmUrl = `https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${q}`;
   const tpUrl = `https://www.tcgplayer.com/search/pokemon/product?q=${q}`;
 

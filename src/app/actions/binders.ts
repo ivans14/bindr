@@ -314,6 +314,7 @@ export async function getCardDetail(cardId: string) {
     select: {
       id: true,
       name: true,
+      nameEn: true,
       number: true,
       setName: true,
       rarity: true,
