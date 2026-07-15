@@ -106,8 +106,9 @@ async function syncSet(lang: string, setId: string): Promise<number> {
     `${BASE}/${lang}/sets/${setId}`,
   );
   if (!set?.cards?.length) return 0;
-  const setName = set.name ?? setId;
   const setSeries = set.serie?.name ?? null;
+  if (/pocket/i.test(setSeries ?? "")) return 0; // exclude Pokémon TCG Pocket (digital game)
+  const setName = set.name ?? setId;
   const releasedAt = set.releaseDate ? new Date(set.releaseDate) : null;
 
   let count = 0;

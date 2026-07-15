@@ -103,7 +103,20 @@ export function BinderBuilder({
   const [sortBy, setSortBy] = useState<"relevance" | "priceDesc" | "priceAsc" | "name" | "number">(
     "relevance",
   );
-  const [preview, setPreview] = useState<SearchResult | null>(null);
+  const [preview, setPreview] = useState<{ card: SearchResult; top: number; left: number } | null>(
+    null,
+  );
+  function showPreview(card: SearchResult | null, rect: DOMRect | null) {
+    if (!card || !rect) {
+      setPreview(null);
+      return;
+    }
+    const W = 224;
+    const H = 360;
+    const left = Math.max(12, rect.left - W - 16); // to the left of the hovered row
+    const top = Math.min(Math.max(12, rect.top - 40), window.innerHeight - H - 12);
+    setPreview({ card, top, left });
+  }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -567,7 +580,7 @@ export function BinderBuilder({
                   key={card.id}
                   card={card}
                   onClick={() => clickPlace(card)}
-                  onPreview={setPreview}
+                  onPreview={showPreview}
                 />
               ))}
             </div>
@@ -610,16 +623,19 @@ export function BinderBuilder({
         ) : null}
       </DragOverlay>
 
-      {/* Hover-to-zoom preview (desktop) */}
+      {/* Hover-to-zoom preview (desktop), positioned beside the hovered row */}
       {preview && !activeCard && (
-        <div className="pointer-events-none fixed left-6 top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border border-border bg-popover p-3 shadow-2xl xl:block">
-          <CardImage card={preview} variant="plain" className="w-full ring-1 ring-white/10" />
-          <div className="mt-2 truncate text-sm font-medium">{preview.name}</div>
+        <div
+          className="pointer-events-none fixed z-50 hidden w-56 rounded-xl border border-border bg-popover p-3 shadow-2xl xl:block"
+          style={{ top: preview.top, left: preview.left }}
+        >
+          <CardImage card={preview.card} variant="plain" className="w-full ring-1 ring-white/10" />
+          <div className="mt-2 truncate text-sm font-medium">{preview.card.name}</div>
           <div className="truncate text-xs text-muted-foreground">
-            {preview.setName} · #{preview.number}
+            {preview.card.setName} · #{preview.card.number}
           </div>
           <div className="mt-1 text-sm font-semibold">
-            {preview.priceEur != null ? formatEur(preview.priceEur) : "—"}
+            {preview.card.priceEur != null ? formatEur(preview.card.priceEur) : "—"}
           </div>
         </div>
       )}
@@ -757,7 +773,7 @@ function ResultRow({
 }: {
   card: SearchResult;
   onClick: () => void;
-  onPreview: (c: SearchResult | null) => void;
+  onPreview: (c: SearchResult | null, rect: DOMRect | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `card-${card.id}`,
@@ -768,8 +784,8 @@ function ResultRow({
     <div
       ref={setNodeRef}
       style={{ opacity: isDragging ? 0.4 : 1 }}
-      onMouseEnter={() => onPreview(card)}
-      onMouseLeave={() => onPreview(null)}
+      onMouseEnter={(e) => onPreview(card, e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => onPreview(null, null)}
       className="flex items-center gap-2.5 rounded-lg border border-transparent p-1.5 hover:border-border hover:bg-muted/50"
     >
       <button {...listeners} {...attributes} className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing">

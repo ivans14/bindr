@@ -40,11 +40,17 @@ export function CardImage({
     return (
       <div
         className={cn(
-          "grid place-items-center bg-muted p-1 text-center text-[10px] leading-tight text-muted-foreground",
+          "flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-background p-2 text-center",
           box,
         )}
       >
-        <span>{card.name}</span>
+        <span className="line-clamp-3 text-[11px] font-medium leading-tight text-foreground/80">
+          {card.name}
+        </span>
+        {card.number && <span className="text-[9px] text-muted-foreground">#{card.number}</span>}
+        <span className="mt-0.5 text-[8px] uppercase tracking-wide text-muted-foreground/60">
+          no image
+        </span>
       </div>
     );
   }

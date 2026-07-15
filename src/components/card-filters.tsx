@@ -83,9 +83,7 @@ export function CardFilters({
       </div>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-[70vh] space-y-3 overflow-y-auto rounded-xl border border-border bg-popover p-3 shadow-2xl">
+        <div className="space-y-3 border-t border-border px-3 py-3">
           <Group label="Category">
             {SUPERTYPES.map((s) => (
               <button
@@ -173,8 +171,7 @@ export function CardFilters({
               clearLabel="Any artist"
             />
           </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
