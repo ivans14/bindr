@@ -36,16 +36,14 @@ export function BinderCard({
   // Keep pointer interactions on affordances from arming a drag in the container.
   const stop = (e: React.PointerEvent) => e.stopPropagation();
 
+  // Compact icon-only badge in the corner — conveys owned vs to-source at a glance
+  // without a bar covering the art. The label lives in the tooltip.
   const chipClass = cn(
-    "absolute bottom-1 left-1 right-1 rounded-md px-1.5 py-1 text-[10px] font-semibold backdrop-blur transition-colors",
+    "absolute bottom-1 right-1 grid size-6 place-items-center rounded-md backdrop-blur transition-colors",
     owned ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground",
   );
-  const chipLabel = (
-    <span className="flex items-center justify-center gap-1">
-      {owned ? <Check className="size-3" /> : <ShoppingBag className="size-3" />}
-      {owned ? "Owned" : "Source"}
-    </span>
-  );
+  const chipLabel = owned ? <Check className="size-3.5" /> : <ShoppingBag className="size-3.5" />;
+  const chipTitle = owned ? "Owned" : "To source";
 
   return (
     <div
@@ -85,12 +83,14 @@ export function BinderCard({
             onPointerDown={stop}
             onClick={onToggleStatus}
             className={chipClass}
-            title="Toggle owned / to source"
+            title={`${chipTitle} — click to toggle`}
           >
             {chipLabel}
           </button>
         ) : (
-          <span className={chipClass}>{chipLabel}</span>
+          <span className={chipClass} title={chipTitle}>
+            {chipLabel}
+          </span>
         ))}
     </div>
   );
